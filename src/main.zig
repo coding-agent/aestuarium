@@ -7,12 +7,21 @@ const zxdg = wayland.client.zxdg;
 const zwlr = wayland.client.zwlr;
 
 const Global = @import("globals.zig");
+const Output = @import("output.zig");
 
 pub fn main() !void {
     std.log.info("Launching aestuarium...", .{});
+    var arena = std.heap.ArenaAllocator.init(std.heap.c_allocator);
+    defer arena.deinit();
 
-    const global = try Global.init();
+    var global = try Global.init(arena.allocator());
     defer global.deinit();
 
-    std.debug.print("{any}\n", .{global});
+    var outputs = std.ArrayList(Output).init(arena.allocator());
+    for (global.outputs.?.items) |output| {
+        const info = try Output.getOutputInfo(arena.allocator(), output, &global);
+        try outputs.append(info);
+    }
+
+    if (global.display.?.roundtrip() != .SUCCESS) return error.RoundtipFail;
 }
