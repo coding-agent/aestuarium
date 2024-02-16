@@ -6,7 +6,7 @@ const zxdg = wayland.client.zxdg;
 const zwlr = wayland.client.zwlr;
 
 const Collected = @This();
-display: *wl.Display,
+display: ?*wl.Display,
 seat: ?*wl.Seat,
 compositor: ?*wl.Compositor,
 layer_shell: ?*zwlr.LayerShellV1,
@@ -39,11 +39,22 @@ pub fn init() !Collected {
     registry.setListener(*Collected, Collected.registryListener, &collector);
 
     if (display.roundtrip() != .SUCCESS) return error.RoundtripFail;
+    inline for (std.meta.fields(Collected)) |*f| {
+        if (@field(collector, f.name) == null) return error.MissingRequiredGlobals;
+    }
 
     return collector;
 }
 
-pub fn registryListener(registry: *wl.Registry, ev: wl.Registry.Event, data: *Collected) void {
+pub fn deinit(self: Collected) void {
+    self.display.?.disconnect();
+    self.compositor.?.destroy();
+    self.layer_shell.?.destroy();
+    self.seat.?.destroy();
+    self.xdg_output_manager.?.destroy();
+}
+
+fn registryListener(registry: *wl.Registry, ev: wl.Registry.Event, data: *Collected) void {
     switch (ev) {
         .global => |global_event| {
             const event = std.meta.stringToEnum(EventInterfaces, std.mem.span(global_event.interface)) orelse return;
@@ -92,12 +103,4 @@ pub fn registryListener(registry: *wl.Registry, ev: wl.Registry.Event, data: *Co
 
         .global_remove => {},
     }
-}
-
-pub fn deinit(self: *Collected) !void {
-    self.display.?.disconnect();
-    self.compositor.?.destroy();
-    self.layer_shell.?.destroy();
-    self.seat.?.destroy();
-    self.xdg_output_manager.destroy();
 }

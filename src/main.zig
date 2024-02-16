@@ -11,7 +11,8 @@ const Global = @import("globals.zig");
 pub fn main() !void {
     std.log.info("Launching aestuarium...", .{});
 
-    const collector = Global.init();
+    const global = try Global.init();
+    defer global.deinit();
 
-    std.debug.print("{any}\n", .{collector});
+    std.debug.print("{any}\n", .{global});
 }
