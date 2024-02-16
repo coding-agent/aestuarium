@@ -1,0 +1,13 @@
+.{
+    .name = "aestuarium",
+    .version = "0.0.0",
+
+    .paths = .{""},
+
+    .dependencies = .{
+        .wayland = .{
+            .url = "git+https://git.mzte.de/LordMZTE/zig-wayland#4de9f2d6d5fddae1fbb29e21fd1dae69e646ab7d",
+            .hash = "1220d6448c277e5c41348aa95ce2ba2fc92a92cb7a9e9783edf0f816cd0260122d31",
+        }
+    },
+}
