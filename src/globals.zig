@@ -1,7 +1,7 @@
 const std = @import("std");
 const Allocator = std.mem.Allocator;
+
 const wayland = @import("wayland");
-const c = @import("ffi.zig").c;
 const wl = wayland.client.wl;
 const zxdg = wayland.client.zxdg;
 const zwlr = wayland.client.zwlr;

@@ -9,30 +9,52 @@ const zwlr = wayland.client.zwlr;
 
 const Global = @import("globals.zig");
 
+const OutputInfo = struct {
+    name: []const u8 = "",
+    description: []const u8 = "",
+    x: i32 = 0,
+    y: i32 = 0,
+    width: i32 = 0,
+    height: i32 = 0,
+};
+
 const Output = @This();
-name: ?[]const u8 = null,
-description: ?[]const u8 = null,
-x: i32 = 0,
-y: i32 = 0,
-width: i32 = 0,
-height: i32 = 0,
+available_outputs: []OutputInfo,
 
-pub fn getOutputInfo(ally: Allocator, output: *wl.Output, global: *Global) !Output {
-    _ = ally; // autofix
-    var info = Output{};
-    const xdg_output = try global.xdg_output_manager.?.getXdgOutput(output);
-    xdg_output.setListener(*Output, xdgOutputListener, &info);
-    if (global.display.?.roundtrip() != .SUCCESS) return error.RoundtripFail;
-    return info;
+pub fn init(global: *Global) !Output {
+    var info_list = std.ArrayList(OutputInfo).init(std.heap.c_allocator);
+    defer info_list.deinit();
+
+    for (global.outputs.?.items) |wl_output| {
+        var info = OutputInfo{};
+        const xdg_output = try global.xdg_output_manager.?.getXdgOutput(wl_output);
+        xdg_output.setListener(*OutputInfo, xdgOutputListener, &info);
+        if (global.display.?.roundtrip() != .SUCCESS) return error.RoundtripFail;
+        try info_list.append(info);
+    }
+
+    return Output{
+        .available_outputs = try info_list.toOwnedSlice(),
+    };
 }
 
-//TODO complete this
-pub fn setWallpaper(globals: Global) void {
-    _ = globals; // autofix
+pub fn listOutputs(self: Output) !void {
+    var arena = std.heap.ArenaAllocator.init(std.heap.c_allocator);
+    defer arena.deinit();
+    var stdout_buf = std.io.bufferedWriter(std.io.getStdOut().writer());
+    defer stdout_buf.flush() catch {};
+    const writer = stdout_buf.writer();
 
+    var global = try Global.init(arena.allocator());
+    defer global.deinit();
+
+    for (global.outputs.?.items) |output| {
+        const info = try self.getOutputInfo(output, &global);
+        try writer.print("{s}\n\tdescrition: {s}\n\tresolution: {d}x{d}\n", .{ info.name.?, info.description.?, info.width, info.height });
+    }
 }
 
-fn xdgOutputListener(_: *zxdg.OutputV1, ev: zxdg.OutputV1.Event, info: *Output) void {
+fn xdgOutputListener(_: *zxdg.OutputV1, ev: zxdg.OutputV1.Event, info: *OutputInfo) void {
     switch (ev) {
         .name => |e| {
             info.name = std.mem.span(e.name);
