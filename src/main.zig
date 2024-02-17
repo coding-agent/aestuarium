@@ -20,7 +20,7 @@ pub fn main() !u8 {
     var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
     defer arena.deinit();
 
-    const opts = zig_args.parseForCurrentProcess(args.Opts, arena.allocator(), .print) catch |err|
+    const opts = zig_args.parseWithVerbForCurrentProcess(args.Opts, args.Args, arena.allocator(), .print) catch |err|
         switch (err) {
         error.InvalidArguments => {
             std.log.err("Invalid argument", .{});
@@ -42,7 +42,10 @@ pub fn main() !u8 {
         var global = try Global.init(arena.allocator());
         defer global.deinit();
         const outputs = try Output.init(&global);
-        const output_list = try outputs.listOutputs();
+        const output_list = if (opts.options.json)
+            try outputs.listOutputs(.{ .format = .json })
+        else
+            try outputs.listOutputs(.{});
 
         var stdout_buf = std.io.bufferedWriter(std.io.getStdOut().writer());
         defer stdout_buf.flush() catch {};

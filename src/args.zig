@@ -8,11 +8,15 @@ const Outputs = struct {};
 pub const Opts = struct {
     help: bool = false,
     outputs: bool = false,
+    json: bool = false,
 
     pub const shorthands = .{
         .h = "help",
+        .j = "json",
     };
 };
+
+pub const Args = union(enum) {};
 
 const help_msg =
     \\Aestuarium v{[version]s} - yet another wayland background manager 

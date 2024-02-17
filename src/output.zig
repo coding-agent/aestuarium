@@ -38,17 +38,35 @@ pub fn init(global: *Global) !Output {
     };
 }
 
-// TODO optionally add return for json string
-pub fn listOutputs(self: Output) ![][]const u8 {
-    const allocator: Allocator = std.heap.c_allocator;
-    var formated_list = std.ArrayList([]const u8).init(allocator);
-    defer formated_list.deinit();
+const Options = struct {
+    format: enum {
+        normal,
+        json,
+    } = .normal,
+};
 
-    for (self.available_outputs) |output| {
-        const formated = try std.fmt.allocPrint(allocator, "{s}\n\tdescrition: {s}\n\tresolution: {d}x{d}\n\tLogical Position:\n\t\tx: {d}\n\t\ty: {d}", .{ output.name, output.description, output.width, output.height, output.x, output.y });
-        try formated_list.append(formated);
+pub fn listOutputs(self: Output, options: Options) ![][]const u8 {
+    switch (options.format) {
+        .json => {
+            // TODO return json string
+            return error.JsonNotYetImplemented;
+        },
+        .normal => {
+            const allocator: Allocator = std.heap.c_allocator;
+            var formated_list = std.ArrayList([]const u8).init(allocator);
+            defer formated_list.deinit();
+
+            for (self.available_outputs) |output| {
+                const formated = try std.fmt.allocPrint(
+                    allocator,
+                    "{s}\n\tdescrition: {s}\n\tresolution: {d}x{d}\n\tLogical Position:\n\t\tx: {d}\n\t\ty: {d}",
+                    .{ output.name, output.description, output.width, output.height, output.x, output.y },
+                );
+                try formated_list.append(formated);
+            }
+            return formated_list.toOwnedSlice();
+        },
     }
-    return formated_list.toOwnedSlice();
 }
 
 fn xdgOutputListener(_: *zxdg.OutputV1, ev: zxdg.OutputV1.Event, info: *OutputInfo) void {
