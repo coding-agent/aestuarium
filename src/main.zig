@@ -42,7 +42,15 @@ pub fn main() !u8 {
         var global = try Global.init(arena.allocator());
         defer global.deinit();
         const outputs = try Output.init(&global);
-        try outputs.listOutputs();
+        const output_list = try outputs.listOutputs();
+
+        var stdout_buf = std.io.bufferedWriter(std.io.getStdOut().writer());
+        defer stdout_buf.flush() catch {};
+        const writer = stdout_buf.writer();
+
+        for (output_list) |output| {
+            try writer.print("{s}\n", .{output});
+        }
         return 0;
     }
 

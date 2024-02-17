@@ -38,14 +38,17 @@ pub fn init(global: *Global) !Output {
     };
 }
 
-pub fn listOutputs(self: Output) !void {
-    var stdout_buf = std.io.bufferedWriter(std.io.getStdOut().writer());
-    defer stdout_buf.flush() catch {};
-    const writer = stdout_buf.writer();
+// TODO optionally add return for json string
+pub fn listOutputs(self: Output) ![][]const u8 {
+    const allocator: Allocator = std.heap.c_allocator;
+    var formated_list = std.ArrayList([]const u8).init(allocator);
+    defer formated_list.deinit();
 
     for (self.available_outputs) |output| {
-        try writer.print("{s}\n\tdescrition: {s}\n\tresolution: {d}x{d}\n", .{ output.name, output.description, output.width, output.height });
+        const formated = try std.fmt.allocPrint(allocator, "{s}\n\tdescrition: {s}\n\tresolution: {d}x{d}\n\tLogical Position:\n\t\tx: {d}\n\t\ty: {d}", .{ output.name, output.description, output.width, output.height, output.x, output.y });
+        try formated_list.append(formated);
     }
+    return formated_list.toOwnedSlice();
 }
 
 fn xdgOutputListener(_: *zxdg.OutputV1, ev: zxdg.OutputV1.Event, info: *OutputInfo) void {
@@ -68,8 +71,6 @@ fn xdgOutputListener(_: *zxdg.OutputV1, ev: zxdg.OutputV1.Event, info: *OutputIn
             info.width = size.width;
         },
 
-        else => |remaining| {
-            std.debug.print("what da heck is this: {any}", .{remaining});
-        },
+        else => {},
     }
 }
