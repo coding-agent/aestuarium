@@ -39,18 +39,12 @@ pub fn init(global: *Global) !Output {
 }
 
 pub fn listOutputs(self: Output) !void {
-    var arena = std.heap.ArenaAllocator.init(std.heap.c_allocator);
-    defer arena.deinit();
     var stdout_buf = std.io.bufferedWriter(std.io.getStdOut().writer());
     defer stdout_buf.flush() catch {};
     const writer = stdout_buf.writer();
 
-    var global = try Global.init(arena.allocator());
-    defer global.deinit();
-
-    for (global.outputs.?.items) |output| {
-        const info = try self.getOutputInfo(output, &global);
-        try writer.print("{s}\n\tdescrition: {s}\n\tresolution: {d}x{d}\n", .{ info.name.?, info.description.?, info.width, info.height });
+    for (self.available_outputs) |output| {
+        try writer.print("{s}\n\tdescrition: {s}\n\tresolution: {d}x{d}\n", .{ output.name, output.description, output.width, output.height });
     }
 }
 

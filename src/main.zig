@@ -39,6 +39,10 @@ pub fn main() !u8 {
     }
 
     if (opts.options.outputs) {
+        var global = try Global.init(arena.allocator());
+        defer global.deinit();
+        const outputs = try Output.init(&global);
+        try outputs.listOutputs();
         return 0;
     }
 
