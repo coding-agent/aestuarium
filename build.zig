@@ -5,6 +5,11 @@ pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
+    const zig_args_mod = b.dependency("zig_args", .{
+        .target = target,
+        .optimize = optimize,
+    }).module("args");
+
     const scanner = Scanner.create(b, .{});
     const wayland_mod = scanner.mod;
 
@@ -16,6 +21,7 @@ pub fn build(b: *std.Build) void {
     });
 
     exe.root_module.addImport("wayland", wayland_mod);
+    exe.root_module.addImport("zig-args", zig_args_mod);
 
     scanner.addSystemProtocol("stable/xdg-shell/xdg-shell.xml");
     scanner.addSystemProtocol("unstable/xdg-output/xdg-output-unstable-v1.xml");

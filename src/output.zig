@@ -18,13 +18,15 @@ width: i32 = 0,
 height: i32 = 0,
 
 pub fn getOutputInfo(ally: Allocator, output: *wl.Output, global: *Global) !Output {
-    const info = try ally.create(Output);
+    _ = ally; // autofix
+    var info = Output{};
     const xdg_output = try global.xdg_output_manager.?.getXdgOutput(output);
-    xdg_output.setListener(*Output, xdgOutputListener, info);
+    xdg_output.setListener(*Output, xdgOutputListener, &info);
     if (global.display.?.roundtrip() != .SUCCESS) return error.RoundtripFail;
-    return info.*;
+    return info;
 }
 
+//TODO complete this
 pub fn setWallpaper(globals: Global) void {
     _ = globals; // autofix
 
@@ -42,7 +44,7 @@ fn xdgOutputListener(_: *zxdg.OutputV1, ev: zxdg.OutputV1.Event, info: *Output) 
 
         .logical_position => |pos| {
             info.x = pos.x;
-            info.y = info.y;
+            info.y = pos.y;
         },
 
         .logical_size => |size| {
