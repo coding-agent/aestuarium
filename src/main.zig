@@ -15,7 +15,17 @@ pub fn main() !u8 {
     var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
     defer arena.deinit();
 
-    const opts = try zig_args.parseForCurrentProcess(args.Opts, arena.allocator(), .print);
+    const opts = zig_args.parseForCurrentProcess(args.Opts, arena.allocator(), .print) catch |err|
+        switch (err) {
+        error.InvalidArguments => {
+            std.log.err("Invalid argument", .{});
+            try args.printHelp(arena.allocator());
+            return 1;
+        },
+        else => {
+            @panic(@errorName(err));
+        },
+    };
     defer opts.deinit();
 
     if (opts.options.help) {
@@ -24,7 +34,7 @@ pub fn main() !u8 {
     }
 
     if (opts.options.outputs) {
-        try listOutputs(arena.allocator());
+        try listOutputs();
         return 0;
     }
 
@@ -33,16 +43,18 @@ pub fn main() !u8 {
     return 0;
 }
 
-fn listOutputs(allocator: Allocator) !void {
+fn listOutputs() !void {
+    var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
+    defer arena.deinit();
     var stdout_buf = std.io.bufferedWriter(std.io.getStdOut().writer());
     defer stdout_buf.flush() catch {};
     const writer = stdout_buf.writer();
 
-    var global = try Global.init(allocator);
+    var global = try Global.init(arena.allocator());
     defer global.deinit();
 
     for (global.outputs.?.items) |output| {
-        const info = try Output.getOutputInfo(allocator, output, &global);
+        const info = try Output.getOutputInfo(arena.allocator(), output, &global);
         try writer.print("{s}\n\tdescrition: {s}\n\tresolution: {d}x{d}\n", .{ info.name.?, info.description.?, info.width, info.height });
     }
 }
