@@ -1,11 +1,11 @@
 const std = @import("std");
-const Scanner = @import("wayland").Scanner;
+const Scanner = @import("zig-wayland").Scanner;
 
 pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
-    const zig_args_mod = b.dependency("zig_args", .{
+    const zig_args_mod = b.dependency("zig-args", .{
         .target = target,
         .optimize = optimize,
     }).module("args");

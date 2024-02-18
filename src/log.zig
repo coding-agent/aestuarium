@@ -17,7 +17,6 @@ pub fn log(
         .warn => "W: ",
         .err => "E: ",
     };
-    stdout.writeAll("") catch {};
 
     switch (scope) {
         .default => {},

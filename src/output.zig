@@ -16,6 +16,7 @@ const OutputInfo = struct {
     y: i32 = 0,
     width: i32 = 0,
     height: i32 = 0,
+    wl_output: *wl.Output,
 };
 
 const Output = @This();
@@ -26,7 +27,9 @@ pub fn init(global: *Global) !Output {
     defer info_list.deinit();
 
     for (global.outputs.?.items) |wl_output| {
-        var info = OutputInfo{};
+        var info = OutputInfo{
+            .wl_output = wl_output,
+        };
         const xdg_output = try global.xdg_output_manager.?.getXdgOutput(wl_output);
         xdg_output.setListener(*OutputInfo, xdgOutputListener, &info);
         if (global.display.?.roundtrip() != .SUCCESS) return error.RoundtripFail;
@@ -38,14 +41,14 @@ pub fn init(global: *Global) !Output {
     };
 }
 
-const Options = struct {
+const ListOutputsOptions = struct {
     format: enum {
         normal,
         json,
     } = .normal,
 };
 
-pub fn listOutputs(self: Output, options: Options) ![][]const u8 {
+pub fn listOutputs(self: Output, options: ListOutputsOptions) ![][]const u8 {
     switch (options.format) {
         .json => {
             // TODO return json string
@@ -67,6 +70,18 @@ pub fn listOutputs(self: Output, options: Options) ![][]const u8 {
             return formated_list.toOwnedSlice();
         },
     }
+}
+
+pub fn findOutputByName(self: Output, name: []const u8) !OutputInfo {
+    for (self.available_outputs) |output| {
+        if (std.mem.eql(u8, output.name, name)) return output;
+    }
+    return error.NoSuchOutput;
+}
+
+pub fn findOutputByLogicalPosition(self: Output) !OutputInfo {
+    _ = self; // autofix
+
 }
 
 fn xdgOutputListener(_: *zxdg.OutputV1, ev: zxdg.OutputV1.Event, info: *OutputInfo) void {

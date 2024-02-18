@@ -21,13 +21,14 @@ pub const Args = union(enum) {};
 const help_msg =
     \\Aestuarium v{[version]s} - yet another wayland background manager 
     \\
+    \\usage: {[a0]s} [options] <commands>
+    \\
     \\Options:
-    \\    --help, -h        Print this help and exit
+    \\    --json, -j        Returns the result in json format
     \\
-    \\
-    \\Subcommands:
-    \\    {[a0]s} outputs               Lists the monitors currently available
-    \\    {[a0]s} help                  Print this help and exit
+    \\subcommands:
+    \\    --outputs               Lists the monitors currently available
+    \\    --help                  Print this help and exit
 ;
 
 pub fn printHelp(alloc: Allocator) !void {
