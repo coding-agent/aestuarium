@@ -92,6 +92,13 @@ pub fn listOutputs(self: Output, allocator: std.mem.Allocator) ![][]u8 {
     return formatted_list;
 }
 
+pub fn findOutputByName(self: Output, name: []const u8) !OutputInfo {
+    for (self.available_outputs) |output| {
+        if (std.mem.eql(u8, output.name, name)) return output;
+    }
+    return error.NoSuchOutput;
+}
+
 fn xdgOutputListener(
     _: *zxdg.OutputV1,
     ev: zxdg.OutputV1.Event,

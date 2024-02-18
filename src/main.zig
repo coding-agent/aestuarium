@@ -26,11 +26,7 @@ pub fn main() !u8 {
     };
     const alloc = if (@TypeOf(dbg_gpa) != void) dbg_gpa.allocator() else std.heap.c_allocator;
 
-<<<<<<< HEAD
     const opts = zig_args.parseWithVerbForCurrentProcess(args.Opts, args.Args, alloc, .print) catch |err|
-=======
-    const opts = zig_args.parseForCurrentProcess(args.Opts, alloc, .print) catch |err|
->>>>>>> efd41283d7aee7e24183fe89ba07288de6f09b04
         switch (err) {
         error.InvalidArguments => {
             std.log.err("Invalid argument", .{});
@@ -72,7 +68,7 @@ pub fn main() !u8 {
     }
 
     if (opts.options.json) {
-        try args.printHelp(arena.allocator());
+        try args.printHelp(alloc);
         return 1;
     }
 
