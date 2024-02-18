@@ -26,9 +26,9 @@ const help_msg =
     \\Options:
     \\    --json, -j        Returns the result in json format
     \\
-    \\subcommands:
-    \\    --outputs               Lists the monitors currently available
-    \\    --help                  Print this help and exit
+    \\Subcommands:
+    \\    {[a0]s} outputs               Lists the monitors currently available
+    \\    {[a0]s} help                  Print this help and exit
 ;
 
 pub fn printHelp(alloc: Allocator) !void {
