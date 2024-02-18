@@ -20,7 +20,6 @@ const help_msg =
     \\Options:
     \\    --help, -h        Print this help and exit
     \\
-    \\
     \\Subcommands:
     \\    {[a0]s} outputs               Lists the monitors currently available
     \\    {[a0]s} help                  Print this help and exit

@@ -6,13 +6,14 @@ const wl = wayland.client.wl;
 const zxdg = wayland.client.zxdg;
 const zwlr = wayland.client.zwlr;
 
-const Collected = @This();
-display: ?*wl.Display,
-outputs: ?std.ArrayList(*wl.Output),
+display: *wl.Display,
+outputs: std.ArrayList(*wl.Output),
 seat: ?*wl.Seat = null,
 compositor: ?*wl.Compositor = null,
 layer_shell: ?*zwlr.LayerShellV1 = null,
 xdg_output_manager: ?*zxdg.OutputManagerV1 = null,
+
+const Globals = @This();
 
 const EventInterfaces = enum {
     wl_shm,
@@ -24,35 +25,35 @@ const EventInterfaces = enum {
     zxdg_output_manager_v1,
 };
 
-pub fn init(ally: Allocator) !Collected {
+pub fn init(alloc: std.mem.Allocator) !Globals {
     const display = try wl.Display.connect(null);
     errdefer display.disconnect();
 
     const registry = try display.getRegistry();
     defer registry.destroy();
 
-    const collector = try ally.create(Collected);
-    collector.* = Collected{
+    var self = Globals{
         .display = display,
-        .outputs = std.ArrayList(*wl.Output).init(std.heap.c_allocator),
+        .outputs = std.ArrayList(*wl.Output).init(alloc),
     };
 
-    registry.setListener(*Collected, Collected.registryListener, collector);
+    registry.setListener(*Globals, Globals.registryListener, &self);
 
     if (display.roundtrip() != .SUCCESS) return error.RoundtripFail;
-    inline for (std.meta.fields(Collected)) |*f| {
-        if (@field(collector, f.name) == null) return error.MissingRequiredGlobals;
+    inline for (std.meta.fields(Globals)) |*f| {
+        if (@typeInfo(@TypeOf(f.type)) == .Optional and
+            @field(self, f.name) == null) return error.MissingRequiredGlobals;
     }
 
-    return collector.*;
+    return self;
 }
 
-pub fn deinit(self: Collected) void {
-    self.display.?.disconnect();
-    self.outputs.?.deinit();
+pub fn deinit(self: Globals) void {
+    self.display.disconnect();
+    self.outputs.deinit();
 }
 
-fn registryListener(registry: *wl.Registry, ev: wl.Registry.Event, data: *Collected) void {
+fn registryListener(registry: *wl.Registry, ev: wl.Registry.Event, data: *Globals) void {
     switch (ev) {
         .global => |global_event| {
             const event = std.meta.stringToEnum(EventInterfaces, std.mem.span(global_event.interface)) orelse return;
@@ -61,7 +62,7 @@ fn registryListener(registry: *wl.Registry, ev: wl.Registry.Event, data: *Collec
                     data.seat = registry.bind(
                         global_event.name,
                         wl.Seat,
-                        global_event.version,
+                        wl.Seat.generated_version,
                     ) catch |err| @panic(@errorName(err));
                 },
 
@@ -69,7 +70,7 @@ fn registryListener(registry: *wl.Registry, ev: wl.Registry.Event, data: *Collec
                     data.compositor = registry.bind(
                         global_event.name,
                         wl.Compositor,
-                        global_event.version,
+                        wl.Compositor.generated_version,
                     ) catch |err| @panic(@errorName(err));
                 },
 
@@ -77,17 +78,17 @@ fn registryListener(registry: *wl.Registry, ev: wl.Registry.Event, data: *Collec
                     const bound = registry.bind(
                         global_event.name,
                         wl.Output,
-                        global_event.version,
+                        wl.Output.generated_version,
                     ) catch |err| @panic(@errorName(err));
 
-                    data.outputs.?.append(bound) catch |err| @panic(@errorName(err));
+                    data.outputs.append(bound) catch |err| @panic(@errorName(err));
                 },
 
                 .zwlr_layer_shell_v1 => {
                     data.layer_shell = registry.bind(
                         global_event.name,
                         zwlr.LayerShellV1,
-                        global_event.version,
+                        zwlr.LayerShellV1.generated_version,
                     ) catch |err| @panic(@errorName(err));
                 },
 
@@ -95,7 +96,7 @@ fn registryListener(registry: *wl.Registry, ev: wl.Registry.Event, data: *Collec
                     data.xdg_output_manager = registry.bind(
                         global_event.name,
                         zxdg.OutputManagerV1,
-                        global_event.version,
+                        zxdg.OutputManagerV1.generated_version,
                     ) catch |err| @panic(@errorName(err));
                 },
 

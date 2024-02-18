@@ -13,16 +13,15 @@ pub fn log(
 
     const prefix = switch (level) {
         .debug => "D: ",
-        .info => "",
+        .info => "I: ",
         .warn => "W: ",
         .err => "E: ",
     };
-    stdout.writeAll("") catch {};
 
     switch (scope) {
         .default => {},
         else => {
-            stdout.print("[" ++ @tagName(scope) ++ "] ", args) catch {};
+            stdout.writeAll("[" ++ @tagName(scope) ++ "] ") catch {};
         },
     }
 
