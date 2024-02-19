@@ -4,7 +4,7 @@ const c = @import("ffi.zig");
 
 const args = @import("args.zig");
 const Globals = @import("Globals.zig");
-const Output = @import("Output.zig");
+const Outputs = @import("Outputs.zig");
 const Ipc = @import("ipc/socket.zig");
 
 const Allocator = std.mem.Allocator;
@@ -47,7 +47,7 @@ pub fn main() !u8 {
         var globals = try Globals.init(alloc);
         defer globals.deinit();
 
-        const outputs = try Output.init(alloc, globals);
+        const outputs = try Outputs.init(alloc, globals);
         defer outputs.deinit(alloc);
 
         // TODO: make this directly write to a writer instead of allocating
@@ -80,7 +80,7 @@ pub fn main() !u8 {
     var globals = try Globals.init(alloc);
     defer globals.deinit();
 
-    const info = try Output.init(alloc, globals);
+    const info = try Outputs.init(alloc, globals);
     defer info.deinit(alloc);
 
     const surface = try globals.compositor.?.createSurface();
@@ -173,7 +173,7 @@ pub fn main() !u8 {
     // do this each frame
     {
         // set clear color to red
-        c.glClearColor(1.0, 0.0, 0.0, 1.0);
+        c.glClearColor(0.2, 0.1, 0.4, 1.0);
 
         // clear screen
         c.glClear(c.GL_COLOR_BUFFER_BIT);

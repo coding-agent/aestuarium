@@ -25,14 +25,14 @@ const OutputInfo = struct {
 
 available_outputs: []OutputInfo,
 
-const Output = @This();
+const Outputs = @This();
 
 const XdgOutputListenerData = struct {
     info: *OutputInfo,
     alloc: std.mem.Allocator,
 };
 
-pub fn init(alloc: std.mem.Allocator, globals: Globals) !Output {
+pub fn init(alloc: std.mem.Allocator, globals: Globals) !Outputs {
     var info_list = try alloc.alloc(OutputInfo, globals.outputs.items.len);
     errdefer {
         for (info_list) |inf| inf.deinit(alloc);
@@ -55,17 +55,17 @@ pub fn init(alloc: std.mem.Allocator, globals: Globals) !Output {
         info_list[i] = info;
     }
 
-    return Output{ .available_outputs = info_list };
+    return Outputs{ .available_outputs = info_list };
 }
 
-pub fn deinit(self: Output, alloc: std.mem.Allocator) void {
+pub fn deinit(self: Outputs, alloc: std.mem.Allocator) void {
     for (self.available_outputs) |inf| inf.deinit(alloc);
     alloc.free(self.available_outputs);
 }
 
 // TODO optionally add return for json string
 /// Caller must free both the returned slice as well as its elements using the supplied allocator.
-pub fn listOutputs(self: Output, allocator: std.mem.Allocator) ![][]u8 {
+pub fn listOutputs(self: Outputs, allocator: std.mem.Allocator) ![][]u8 {
     var formatted_list = try allocator.alloc([]u8, self.available_outputs.len);
     // Free both list and elements on error
     errdefer {
@@ -92,7 +92,7 @@ pub fn listOutputs(self: Output, allocator: std.mem.Allocator) ![][]u8 {
     return formatted_list;
 }
 
-pub fn findOutputByName(self: Output, name: []const u8) !OutputInfo {
+pub fn findOutputByName(self: Outputs, name: []const u8) !OutputInfo {
     for (self.available_outputs) |output| {
         if (std.mem.eql(u8, output.name, name)) return output;
     }
