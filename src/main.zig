@@ -5,6 +5,7 @@ const c = @import("ffi.zig");
 const args = @import("args.zig");
 const Globals = @import("Globals.zig");
 const Output = @import("Output.zig");
+const Ipc = @import("ipc/socket.zig");
 
 const Allocator = std.mem.Allocator;
 
@@ -74,6 +75,7 @@ pub fn main() !u8 {
 
     // TODO check for existing instances of the app running
     std.log.info("Launching app...", .{});
+    _ = try std.Thread.spawn(.{}, Ipc.init, .{});
 
     var globals = try Globals.init(alloc);
     defer globals.deinit();

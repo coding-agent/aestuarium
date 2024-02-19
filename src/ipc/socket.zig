@@ -7,7 +7,6 @@ const Allocator = std.mem.Allocator;
 const Socket = @This();
 
 pub fn init() !void {
-    const logger = std.log.scoped(.IPC);
     var server = Server.init(.{
         .reuse_port = true,
         .reuse_address = true,
@@ -21,17 +20,21 @@ pub fn init() !void {
         else => return err,
     };
     fs.deleteFileAbsolute("/tmp/aestuarium/.aestuarium.sock") catch {};
+    defer fs.deleteFileAbsolute("/tmp/aestuarium/.aestuarium.sock") catch {};
 
     const address = try std.net.Address.initUnix(path);
     try server.listen(address);
 
-    logger.info("Starting IPC server...", .{});
+    std.log.info("Starting IPC server...", .{});
 
-    var buff: [500]u8 = undefined;
     while (true) {
         const conn = try server.accept();
-
-        const bytes = try conn.stream.read(&buff);
-        _ = bytes; // autofix
+        try handleConnection(conn);
     }
+}
+
+fn handleConnection(conn: net.StreamServer.Connection) !void {
+    var buff: [500]u8 = undefined;
+    const bytes = try conn.stream.read(&buff);
+    std.log.debug("{s}", .{buff[0..bytes]});
 }
