@@ -1,6 +1,6 @@
 const std = @import("std");
 const zig_args = @import("zig-args");
-const c = @import("ffi.zig").c;
+const c = @import("ffi.zig");
 
 const args = @import("args.zig");
 const Globals = @import("Globals.zig");
@@ -144,20 +144,6 @@ pub fn main() !u8 {
 
     layer_surface.setExclusiveZone(-1);
 
-    var buff: [10000]u8 = undefined;
-
-    const egl_window = try wl.EglWindow.create(surface, @as(c_int, info.available_outputs[0].width), @as(c_int, info.available_outputs[0].height));
-    errdefer egl_window.destroy();
-    const egl_dpy = c.eglGetDisplay(@ptrCast(global.display.?)) orelse return error.EGLError;
-    const egl_image = c.eglCreateImage(global.display.?, c.EGL_NO_CONTEXT, c.EGL_GL_TEXTURE_2D, @ptrCast(&buff), null);
-    _ = egl_image; // autofix
-
-    const egl_surf = c.eglCreateWindowSurface(egl_dpy, null, @ptrCast(egl_window), null);
-    const resmc = c.eglMakeCurrent(egl_dpy, egl_surf, egl_surf, null);
-    if (resmc != c.EGL_TRUE) return error.MakeCurrentFail;
-    surface.attach(@ptrCast(egl_surf), 0, 0);
-
-    c.glTextureImage2DEXT(c.GL_2D, 0, c.GL_RGBA, 0, 1920, 1080, 0, c.GL_RGBA, c.GL_UNSIGNED_BYTE, @ptrCast(&buff));
     surface.commit();
 
     if (globals.display.roundtrip() != .SUCCESS) return error.RoundtripFail;
