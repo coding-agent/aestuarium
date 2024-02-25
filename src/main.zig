@@ -214,21 +214,20 @@ fn runMainLoop(alloc: Allocator) !u8 {
 
     c.glTexParameteri(c.GL_TEXTURE_2D, c.GL_TEXTURE_WRAP_S, c.GL_CLAMP_TO_EDGE);
     c.glTexParameteri(c.GL_TEXTURE_2D, c.GL_TEXTURE_WRAP_T, c.GL_CLAMP_TO_EDGE);
-    c.glTexParameteri(c.GL_TEXTURE_2D, c.GL_TEXTURE_MIN_FILTER, c.GL_LINEAR);
+    c.glTexParameteri(c.GL_TEXTURE_2D, c.GL_TEXTURE_MIN_FILTER, c.GL_LINEAR_MIPMAP_LINEAR);
     c.glTexParameteri(c.GL_TEXTURE_2D, c.GL_TEXTURE_MAG_FILTER, c.GL_LINEAR);
 
     c.glTexImage2D(c.GL_TEXTURE_2D, 0, c.GL_RGB32F, width, height, 0, c.GL_RGB32F, c.GL_FLOAT, &texture);
-
-    // non working experimemnts
-    //c.glReadPixels(0, 0, width, height, c.GL_RGBA32F, c.GL_FLOAT, &texture);
-    //c.glDrawPixels(width, height, c.GL_RGBA32F, c.GL_FLOAT, &texture);
-    //c.glClearTexImage(c.GL_TEXTURE_2D, 0, c.GL_RGBA32F, c.GL_FLOAT, &texture);
-
-    c.glEnable(c.GL_TEXTURE_2D);
+    c.glGenerateMipmap(c.GL_TEXTURE_2D);
 
     initShaders();
 
+    c.glClearColor(0.1, 0.1, 0.3, 1.0);
     c.glClear(c.GL_COLOR_BUFFER_BIT);
+
+    c.glDrawElements(c.GL_TRIANGLES, 6, c.GL_FLOAT, null);
+    c.glBindVertexArray(0);
+    //c.glDrawPixels(width, height, c.GL_RGBA32F, c.GL_FLOAT, &texture);
 
     try getEglError();
     // swap double-buffered framebuffer
@@ -256,14 +255,18 @@ fn initShaders() void {
     const vertexShaderSource =
         \\#version 330 core
         \\
-        \\layout(location = 0) in vec2 in_position;
-        \\layout(location = 1) in vec2 in_texcoord;
+        \\layout(location = 0) in vec3 aPos;
+        \\layout(location = 1) in vec3 aColor;
+        \\layout(location = 2) in vec2 aTexCoord;
         \\
-        \\out vec2 frag_texcoord;
+        \\out vec3 ourColor
+        \\out vec2 TexCoord;
         \\
-        \\void main() {
-        \\    gl_Position = vec4(in_position, 0.0, 1.0);
-        \\    frag_texcoord = in_texcoord;
+        \\void main()
+        \\{
+        \\    gl_Position = vec4(aPos, 1.0);
+        \\    ourColor = aColor;
+        \\    TexCoord = aTexCoord;
         \\}
     ;
 
@@ -271,18 +274,22 @@ fn initShaders() void {
     const fragmentShaderSource =
         \\#version 330 core
         \\
-        \\in vec2 frag_texcoord;
-        \\
         \\out vec4 frag_color;
         \\
-        \\uniform sampler2D textureSampler;
+        \\in vec3 ourColor;
+        \\in vec2 TexCoord;
+        \\
+        \\uniform sampler2D ourTexture;
         \\
         \\void main() {
-        \\    frag_color = texture(textureSampler, frag_texcoord);
+        \\    frag_color = texture(ourTexture, TexCoord);
         \\}
     ;
+
     const vshader = c.glCreateShader(c.GL_VERTEX_SHADER);
     const fshader = c.glCreateShader(c.GL_FRAGMENT_SHADER);
+    defer c.glDeleteShader(vshader);
+    defer c.glDeleteShader(fshader);
 
     c.glShaderSource(vshader, 1, @ptrCast(&vertexShaderSource), null);
     c.glShaderSource(fshader, 1, @ptrCast(&fragmentShaderSource), null);
@@ -295,5 +302,40 @@ fn initShaders() void {
     c.glAttachShader(shaderProgram, fshader);
     c.glLinkProgram(shaderProgram);
 
+    var VAO: c_uint = undefined;
+    var VBO: c_uint = undefined;
+    var EBO: c_uint = undefined;
+
+    c.glGenVertexArrays(1, &VAO);
+    c.glGenBuffers(1, &VBO);
+    c.glGenBuffers(1, &EBO);
+
+    const vertices = &[_]f32{
+        0.5, 0.5, 0.0, // top right
+        0.5, -0.5, 0.0, // bottom right
+        -0.5, -0.5, 0.0, // bottom left
+        -0.5, 0.5, 0.0, // top left
+    };
+
+    const indices = &[_]u8{
+        0, 1, 3, // first triangle
+        1, 2, 3, // second triangle
+    };
+
+    // bind Vertex Array Object
+    c.glBindVertexArray(VAO);
+
+    // copy our vertices array in a vertex buffer for OpenGL to use
+    c.glBindBuffer(c.GL_ARRAY_BUFFER, VBO);
+    c.glBufferData(c.GL_ELEMENT_ARRAY_BUFFER, vertices.len, vertices, c.GL_STATIC_DRAW);
+
+    // 3. copy our index array in a element buffer for OpenGL to use
+    c.glBindBuffer(c.GL_ELEMENT_ARRAY_BUFFER, EBO);
+    c.glBufferData(c.GL_ELEMENT_ARRAY_BUFFER, indices.len, indices, c.GL_STATIC_DRAW);
+
+    c.glVertexAttribPointer(0, 3, c.GL_FLOAT, c.GL_FALSE, 32 * 3, @ptrCast(&0));
+    c.glEnableVertexAttribArray(0);
+
     c.glUseProgram(shaderProgram);
+    c.glBindVertexArray(VAO);
 }
