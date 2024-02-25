@@ -12,15 +12,19 @@ const Globals = @import("Globals.zig");
 const OutputInfo = struct {
     name: ?[]const u8 = null,
     description: ?[]const u8 = null,
+    height: i32 = 0,
+    width: i32 = 0,
     x: i32 = 0,
     y: i32 = 0,
-    width: i32 = 0,
-    height: i32 = 0,
 
     pub fn deinit(self: OutputInfo, alloc: std.mem.Allocator) void {
         if (self.name) |name| alloc.free(name);
         if (self.description) |description| alloc.free(description);
     }
+};
+
+const ListOutputsOptions = struct {
+    json: bool = false,
 };
 
 available_outputs: []OutputInfo,
@@ -63,9 +67,15 @@ pub fn deinit(self: Outputs, alloc: std.mem.Allocator) void {
     alloc.free(self.available_outputs);
 }
 
-// TODO optionally add return for json string
 /// Caller must free both the returned slice as well as its elements using the supplied allocator.
-pub fn listOutputs(self: Outputs, allocator: std.mem.Allocator) ![][]u8 {
+pub fn listOutputs(self: Outputs, allocator: std.mem.Allocator, options: ListOutputsOptions) ![][]u8 {
+    if (options.json) {
+        const json = @import("json");
+        var formatted_list = try allocator.alloc([]u8, 1);
+        formatted_list[0] = @constCast(try json.toPrettySlice(allocator, self.available_outputs));
+        return formatted_list;
+    }
+
     var formatted_list = try allocator.alloc([]u8, self.available_outputs.len);
     // Free both list and elements on error
     errdefer {

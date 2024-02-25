@@ -53,7 +53,7 @@ pub fn main() !u8 {
         defer outputs.deinit(alloc);
 
         // TODO: make this directly write to a writer instead of allocating
-        const output_list = try outputs.listOutputs(alloc);
+        const output_list = try outputs.listOutputs(alloc, .{ .json = opts.options.json });
         defer {
             for (output_list) |o| alloc.free(o);
             alloc.free(output_list);
