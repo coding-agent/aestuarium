@@ -10,6 +10,11 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     }).module("args");
 
+    const zigimg_mod = b.dependency("zigimg", .{
+        .target = target,
+        .optimize = optimize,
+    }).module("zigimg");
+
     const scanner = Scanner.create(b, .{});
     const wayland_mod = scanner.mod;
 
@@ -22,6 +27,7 @@ pub fn build(b: *std.Build) void {
 
     exe.root_module.addImport("wayland", wayland_mod);
     exe.root_module.addImport("zig-args", zig_args_mod);
+    exe.root_module.addImport("zigimg", zigimg_mod);
 
     scanner.addSystemProtocol("stable/xdg-shell/xdg-shell.xml");
     scanner.addSystemProtocol("unstable/xdg-output/xdg-output-unstable-v1.xml");
@@ -39,6 +45,8 @@ pub fn build(b: *std.Build) void {
     exe.root_module.linkSystemLibrary("wayland-egl", .{});
     exe.root_module.linkSystemLibrary("EGL", .{});
     exe.root_module.linkSystemLibrary("GL", .{});
+    exe.root_module.link_libc = true;
+    exe.linkLibC();
 
     b.installArtifact(exe);
 

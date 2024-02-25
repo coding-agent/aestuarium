@@ -5,4 +5,6 @@ pub usingnamespace @cImport({
     @cDefine("GL_GLEXT_PROTOTYPES", "1");
     @cInclude("GL/gl.h");
     @cInclude("GL/glext.h");
+
+    @cInclude("stb/stb_image.h");
 });

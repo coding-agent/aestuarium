@@ -1,5 +1,7 @@
 const std = @import("std");
 const zig_args = @import("zig-args");
+const zigimg = @import("zigimg");
+const Image = zigimg.Image;
 const c = @import("ffi.zig");
 
 const args = @import("args.zig");
@@ -73,9 +75,24 @@ pub fn main() !u8 {
         return 1;
     }
 
+    return runMainLoop(alloc);
+}
+
+fn layerSurfaceListener(lsurf: *zwlr.LayerSurfaceV1, ev: zwlr.LayerSurfaceV1.Event, winsize: *[2]c_int) void {
+    switch (ev) {
+        .configure => |configure| {
+            winsize.* = .{ @intCast(configure.width), @intCast(configure.height) };
+            lsurf.setSize(configure.width, configure.height);
+            lsurf.ackConfigure(configure.serial);
+        },
+        else => {},
+    }
+}
+
+fn runMainLoop(alloc: Allocator) !u8 {
     // TODO check for existing instances of the app running
     std.log.info("Launching app...", .{});
-    _ = try std.Thread.spawn(.{}, Ipc.init, .{});
+    //_ = try std.Thread.spawn(.{}, Ipc.init, .{});
 
     var globals = try Globals.init(alloc);
     defer globals.deinit();
@@ -134,8 +151,8 @@ pub fn main() !u8 {
     );
     defer layer_surface.destroy();
 
-    var winsize: ?[2]c_int = null;
-    layer_surface.setListener(*?[2]c_int, layerSurfaceListener, &winsize);
+    var winsize: [2]c_int = undefined;
+    layer_surface.setListener(*[2]c_int, layerSurfaceListener, &winsize);
 
     layer_surface.setAnchor(.{
         .top = true,
@@ -150,7 +167,7 @@ pub fn main() !u8 {
 
     if (globals.display.roundtrip() != .SUCCESS) return error.RoundtripFail;
 
-    const egl_window = try wl.EglWindow.create(surface, winsize.?[0], winsize.?[1]);
+    const egl_window = try wl.EglWindow.create(surface, winsize[0], winsize[1]);
     defer egl_window.destroy();
 
     // create EGL surface on EGL window
@@ -170,30 +187,113 @@ pub fn main() !u8 {
         egl_ctx,
     ) != c.EGL_TRUE) return error.EGLError;
 
-    // do this each frame
-    {
-        // set clear color to red
-        c.glClearColor(0.2, 0.1, 0.4, 1.0);
+    const path = "/home/coding-agent/dev/wallpapers/aqua.png";
+    var image = try Image.fromFilePath(alloc, path);
+    defer image.deinit();
 
-        // clear screen
-        c.glClear(c.GL_COLOR_BUFFER_BIT);
+    var pixel_list = std.ArrayList(c.GLfloat).init(alloc);
+    defer pixel_list.deinit();
 
-        // swap double-buffered framebuffer
-        if (c.eglSwapBuffers(egl_dpy, egl_surface) != c.EGL_TRUE) return error.EGLError;
+    var iterator = image.iterator();
+    while (iterator.next()) |pixel| {
+        try pixel_list.append(pixel.r);
+        try pixel_list.append(pixel.g);
+        try pixel_list.append(pixel.b);
     }
+
+    const width: c_int = @intCast(image.width);
+    const height: c_int = @intCast(image.height);
+    var texture: ?[]f32 = pixel_list.items;
+    _ = &texture; // autofix
+
+    c.glClearColor(0.0, 0.0, 0.0, 1.0);
+
+    var texture_id: c.GLuint = undefined;
+    c.glGenTextures(1, &texture_id);
+    c.glBindTexture(c.GL_TEXTURE_2D, texture_id);
+
+    c.glTexParameteri(c.GL_TEXTURE_2D, c.GL_TEXTURE_WRAP_S, c.GL_CLAMP_TO_EDGE);
+    c.glTexParameteri(c.GL_TEXTURE_2D, c.GL_TEXTURE_WRAP_T, c.GL_CLAMP_TO_EDGE);
+    c.glTexParameteri(c.GL_TEXTURE_2D, c.GL_TEXTURE_MIN_FILTER, c.GL_LINEAR);
+    c.glTexParameteri(c.GL_TEXTURE_2D, c.GL_TEXTURE_MAG_FILTER, c.GL_LINEAR);
+
+    c.glTexImage2D(c.GL_TEXTURE_2D, 0, c.GL_RGB32F, width, height, 0, c.GL_RGB32F, c.GL_FLOAT, &texture);
+
+    // non working experimemnts
+    //c.glReadPixels(0, 0, width, height, c.GL_RGBA32F, c.GL_FLOAT, &texture);
+    //c.glDrawPixels(width, height, c.GL_RGBA32F, c.GL_FLOAT, &texture);
+    //c.glClearTexImage(c.GL_TEXTURE_2D, 0, c.GL_RGBA32F, c.GL_FLOAT, &texture);
+
+    c.glEnable(c.GL_TEXTURE_2D);
+
+    initShaders();
+
+    c.glClear(c.GL_COLOR_BUFFER_BIT);
+
+    try getEglError();
+    // swap double-buffered framebuffer
+    if (c.eglSwapBuffers(egl_dpy, egl_surface) != c.EGL_TRUE) return error.EGLError;
 
     while (globals.display.dispatch() == .SUCCESS) {}
 
     return 1;
 }
 
-fn layerSurfaceListener(lsurf: *zwlr.LayerSurfaceV1, ev: zwlr.LayerSurfaceV1.Event, winsize: *?[2]c_int) void {
-    switch (ev) {
-        .configure => |configure| {
-            winsize.* = .{ @intCast(configure.width), @intCast(configure.height) };
-            lsurf.setSize(configure.width, configure.height);
-            lsurf.ackConfigure(configure.serial);
-        },
-        else => {},
+fn getEglError() !void {
+    switch (c.eglGetError()) {
+        c.EGL_SUCCESS => return std.log.info("EGL Successful", .{}),
+        c.GL_INVALID_ENUM => return error.GLInvalidEnum,
+        c.GL_INVALID_VALUE => return error.GLInvalidValue,
+        c.GL_INVALID_OPERATION => return error.GLInvalidOperation,
+        c.GL_INVALID_FRAMEBUFFER_OPERATION => return error.GLInvalidFramebufferOperation,
+        c.GL_OUT_OF_MEMORY => return error.GLOutOfMemory,
+        else => return error.unkown,
     }
+}
+
+fn initShaders() void {
+    // Vertex Shader
+    const vertexShaderSource =
+        \\#version 330 core
+        \\
+        \\layout(location = 0) in vec2 in_position;
+        \\layout(location = 1) in vec2 in_texcoord;
+        \\
+        \\out vec2 frag_texcoord;
+        \\
+        \\void main() {
+        \\    gl_Position = vec4(in_position, 0.0, 1.0);
+        \\    frag_texcoord = in_texcoord;
+        \\}
+    ;
+
+    // Fragment Shader
+    const fragmentShaderSource =
+        \\#version 330 core
+        \\
+        \\in vec2 frag_texcoord;
+        \\
+        \\out vec4 frag_color;
+        \\
+        \\uniform sampler2D textureSampler;
+        \\
+        \\void main() {
+        \\    frag_color = texture(textureSampler, frag_texcoord);
+        \\}
+    ;
+    const vshader = c.glCreateShader(c.GL_VERTEX_SHADER);
+    const fshader = c.glCreateShader(c.GL_FRAGMENT_SHADER);
+
+    c.glShaderSource(vshader, 1, @ptrCast(&vertexShaderSource), null);
+    c.glShaderSource(fshader, 1, @ptrCast(&fragmentShaderSource), null);
+
+    c.glCompileShader(vshader);
+    c.glCompileShader(fshader);
+
+    const shaderProgram = c.glCreateProgram();
+    c.glAttachShader(shaderProgram, vshader);
+    c.glAttachShader(shaderProgram, fshader);
+    c.glLinkProgram(shaderProgram);
+
+    c.glUseProgram(shaderProgram);
 }
