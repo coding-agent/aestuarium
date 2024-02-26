@@ -203,31 +203,9 @@ fn runMainLoop(alloc: Allocator) !u8 {
 
     const width: c_int = @intCast(image.width);
     const height: c_int = @intCast(image.height);
-    var texture: ?[]f32 = pixel_list.items;
-    _ = &texture; // autofix
+    var texture: []const u8 = image.rawBytes();
 
-    c.glClearColor(0.0, 0.0, 0.0, 1.0);
-
-    var texture_id: c.GLuint = undefined;
-    c.glGenTextures(1, &texture_id);
-    c.glBindTexture(c.GL_TEXTURE_2D, texture_id);
-
-    c.glTexParameteri(c.GL_TEXTURE_2D, c.GL_TEXTURE_WRAP_S, c.GL_CLAMP_TO_EDGE);
-    c.glTexParameteri(c.GL_TEXTURE_2D, c.GL_TEXTURE_WRAP_T, c.GL_CLAMP_TO_EDGE);
-    c.glTexParameteri(c.GL_TEXTURE_2D, c.GL_TEXTURE_MIN_FILTER, c.GL_LINEAR_MIPMAP_LINEAR);
-    c.glTexParameteri(c.GL_TEXTURE_2D, c.GL_TEXTURE_MAG_FILTER, c.GL_LINEAR);
-
-    c.glTexImage2D(c.GL_TEXTURE_2D, 0, c.GL_RGB32F, width, height, 0, c.GL_RGB32F, c.GL_FLOAT, &texture);
-    c.glGenerateMipmap(c.GL_TEXTURE_2D);
-
-    initShaders();
-
-    c.glClearColor(0.1, 0.1, 0.3, 1.0);
-    c.glClear(c.GL_COLOR_BUFFER_BIT);
-
-    c.glDrawElements(c.GL_TRIANGLES, 6, c.GL_FLOAT, null);
-    c.glBindVertexArray(0);
-    //c.glDrawPixels(width, height, c.GL_RGBA32F, c.GL_FLOAT, &texture);
+    render(&texture, width, height);
 
     try getEglError();
     // swap double-buffered framebuffer
@@ -250,11 +228,10 @@ fn getEglError() !void {
     }
 }
 
-fn initShaders() void {
+fn render(texture: ?*[]const u8, width: c_int, height: c_int) void {
     // Vertex Shader
     const vertexShaderSource =
         \\#version 330 core
-        \\
         \\layout(location = 0) in vec3 aPos;
         \\layout(location = 1) in vec3 aColor;
         \\layout(location = 2) in vec2 aTexCoord;
@@ -273,7 +250,6 @@ fn initShaders() void {
     // Fragment Shader
     const fragmentShaderSource =
         \\#version 330 core
-        \\
         \\out vec4 frag_color;
         \\
         \\in vec3 ourColor;
@@ -299,19 +275,19 @@ fn initShaders() void {
 
     // check shader compilation errors
     var vshader_success: c_int = undefined;
-    var vshader_infoLog: [512]u8 = undefined;
+    var vshader_info_log: [512]u8 = undefined;
     c.glGetShaderiv(vshader, c.GL_COMPILE_STATUS, &vshader_success);
     if (vshader_success == 0) {
-        c.glGetShaderInfoLog(vshader, 512, null, &vshader_infoLog);
-        std.log.err("vertext shader {s}", .{vshader_infoLog});
+        c.glGetShaderInfoLog(vshader, 512, null, &vshader_info_log);
+        std.log.err("vertext shader {s}", .{vshader_info_log});
     }
 
     var fshader_success: c_int = undefined;
-    var fshader_infoLog: [512]u8 = undefined;
+    var fshader_info_log: [512]u8 = undefined;
     c.glGetShaderiv(vshader, c.GL_COMPILE_STATUS, &fshader_success);
     if (fshader_success == 0) {
-        c.glGetShaderInfoLog(fshader, 512, null, &fshader_infoLog);
-        std.log.err("fragment shader {s}", .{fshader_infoLog});
+        c.glGetShaderInfoLog(fshader, 512, null, &fshader_info_log);
+        std.log.err("fragment shader {s}", .{fshader_info_log});
     }
 
     const shaderProgram = c.glCreateProgram();
@@ -319,40 +295,67 @@ fn initShaders() void {
     c.glAttachShader(shaderProgram, fshader);
     c.glLinkProgram(shaderProgram);
 
-    var VAO: c_uint = undefined;
-    var VBO: c_uint = undefined;
-    var EBO: c_uint = undefined;
-
-    c.glGenVertexArrays(1, &VAO);
-    c.glGenBuffers(1, &VBO);
-    c.glGenBuffers(1, &EBO);
-
     const vertices = &[_]f32{
-        0.5, 0.5, 0.0, // top right
-        0.5, -0.5, 0.0, // bottom right
-        -0.5, -0.5, 0.0, // bottom left
-        -0.5, 0.5, 0.0, // top left
+        // positions      // colors        // texture coords
+        0.5, 0.5, 0.0, 1.0, 0.0, 0.0, 1.0, 1.0, // top right
+        0.5, -0.5, 0.0, 0.0, 1.0, 0.0, 1.0, 0.0, // bottom right
+        -0.5, -0.5, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, // bottom left
+        -0.5, 0.5, 0.0, 1.0, 1.0, 0.0, 0.0, 1.0, // top left
     };
 
     const indices = &[_]u8{
         0, 1, 3, // first triangle
         1, 2, 3, // second triangle
     };
+    var VAO: c_uint = undefined;
+    var VBO: c_uint = undefined;
+    var EBO: c_uint = undefined;
 
-    // bind Vertex Array Object
+    defer c.glDeleteBuffers(1, &VAO);
+    defer c.glDeleteBuffers(1, &VBO);
+    defer c.glDeleteBuffers(1, &EBO);
+
+    c.glGenVertexArrays(1, &VAO);
+    c.glGenBuffers(1, &VBO);
+    c.glGenBuffers(1, &EBO);
+
     c.glBindVertexArray(VAO);
 
-    // copy our vertices array in a vertex buffer for OpenGL to use
     c.glBindBuffer(c.GL_ARRAY_BUFFER, VBO);
-    c.glBufferData(c.GL_ELEMENT_ARRAY_BUFFER, vertices.len, vertices, c.GL_STATIC_DRAW);
+    c.glBufferData(c.GL_ARRAY_BUFFER, vertices.len * 32, vertices, c.GL_STATIC_DRAW);
 
-    // copy our index array in a element buffer for OpenGL to use
     c.glBindBuffer(c.GL_ELEMENT_ARRAY_BUFFER, EBO);
-    c.glBufferData(c.GL_ELEMENT_ARRAY_BUFFER, indices.len, indices, c.GL_STATIC_DRAW);
+    c.glBufferData(c.GL_ELEMENT_ARRAY_BUFFER, indices.len * 32, indices, c.GL_STATIC_DRAW);
 
-    c.glVertexAttribPointer(0, 3, c.GL_FLOAT, c.GL_FALSE, 32 * 3, @ptrCast(&0));
+    // position attribute
+    c.glVertexAttribPointer(0, 3, c.GL_FLOAT, c.GL_FALSE, 8 * 32, &0);
     c.glEnableVertexAttribArray(0);
+    // color attribute
+    c.glVertexAttribPointer(1, 3, c.GL_FLOAT, c.GL_FALSE, 8 * 32, &(3 * 32));
+    c.glEnableVertexAttribArray(1);
+    // texture coord attribute
+    c.glVertexAttribPointer(2, 2, c.GL_FLOAT, c.GL_FALSE, 8 * 32, &(6 * 32));
+    c.glEnableVertexAttribArray(2);
 
     c.glUseProgram(shaderProgram);
     c.glBindVertexArray(VAO);
+
+    var texture_id: c.GLuint = undefined;
+    c.glGenTextures(1, &texture_id);
+    c.glActiveTexture(c.GL_TEXTURE0); // activate the texture unit first before binding texture
+    c.glBindTexture(c.GL_TEXTURE_2D, texture_id);
+
+    c.glTexParameteri(c.GL_TEXTURE_2D, c.GL_TEXTURE_WRAP_S, c.GL_CLAMP_TO_EDGE);
+    c.glTexParameteri(c.GL_TEXTURE_2D, c.GL_TEXTURE_WRAP_T, c.GL_CLAMP_TO_EDGE);
+    c.glTexParameteri(c.GL_TEXTURE_2D, c.GL_TEXTURE_MIN_FILTER, c.GL_LINEAR_MIPMAP_LINEAR);
+    c.glTexParameteri(c.GL_TEXTURE_2D, c.GL_TEXTURE_MAG_FILTER, c.GL_LINEAR);
+
+    c.glTexImage2D(c.GL_TEXTURE_2D, 0, c.GL_RGB8, width, height, 0, c.GL_RGB8, c.GL_UNSIGNED_BYTE, @ptrCast(texture));
+    c.glGenerateMipmap(c.GL_TEXTURE_2D);
+
+    c.glClearColor(0.1, 0.1, 0.1, 1.0);
+    c.glClear(c.GL_COLOR_BUFFER_BIT);
+
+    c.glDrawElements(c.GL_TRIANGLES, 6, c.GL_UNSIGNED_BYTE, @ptrCast(&0));
+    c.glDrawArrays(c.GL_TRIANGLES, 0, 3);
 }
