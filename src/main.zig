@@ -259,7 +259,7 @@ fn initShaders() void {
         \\layout(location = 1) in vec3 aColor;
         \\layout(location = 2) in vec2 aTexCoord;
         \\
-        \\out vec3 ourColor
+        \\out vec3 ourColor;
         \\out vec2 TexCoord;
         \\
         \\void main()
@@ -297,6 +297,23 @@ fn initShaders() void {
     c.glCompileShader(vshader);
     c.glCompileShader(fshader);
 
+    // check shader compilation errors
+    var vshader_success: c_int = undefined;
+    var vshader_infoLog: [512]u8 = undefined;
+    c.glGetShaderiv(vshader, c.GL_COMPILE_STATUS, &vshader_success);
+    if (vshader_success == 0) {
+        c.glGetShaderInfoLog(vshader, 512, null, &vshader_infoLog);
+        std.log.err("vertext shader {s}", .{vshader_infoLog});
+    }
+
+    var fshader_success: c_int = undefined;
+    var fshader_infoLog: [512]u8 = undefined;
+    c.glGetShaderiv(vshader, c.GL_COMPILE_STATUS, &fshader_success);
+    if (fshader_success == 0) {
+        c.glGetShaderInfoLog(fshader, 512, null, &fshader_infoLog);
+        std.log.err("fragment shader {s}", .{fshader_infoLog});
+    }
+
     const shaderProgram = c.glCreateProgram();
     c.glAttachShader(shaderProgram, vshader);
     c.glAttachShader(shaderProgram, fshader);
@@ -329,7 +346,7 @@ fn initShaders() void {
     c.glBindBuffer(c.GL_ARRAY_BUFFER, VBO);
     c.glBufferData(c.GL_ELEMENT_ARRAY_BUFFER, vertices.len, vertices, c.GL_STATIC_DRAW);
 
-    // 3. copy our index array in a element buffer for OpenGL to use
+    // copy our index array in a element buffer for OpenGL to use
     c.glBindBuffer(c.GL_ELEMENT_ARRAY_BUFFER, EBO);
     c.glBufferData(c.GL_ELEMENT_ARRAY_BUFFER, indices.len, indices, c.GL_STATIC_DRAW);
 
