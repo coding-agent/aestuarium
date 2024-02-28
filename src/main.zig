@@ -317,7 +317,7 @@ fn render(texture: ?[]const u8, width: c_int, height: c_int) void {
     c.glVertexAttribPointer(0, 3, c.GL_FLOAT, c.GL_FALSE, stride, @ptrFromInt(0));
     c.glEnableVertexAttribArray(0);
     // color attribute
-    c.glVertexAttribPointer(1, 3, c.GL_FLOAT, c.GL_FALSE, stride, @ptrFromInt(3 * @sizeOf(f32)));
+    c.glVertexAttribPointer(1, 3, c.GL_FLOAT, c.GL_TRUE, stride, @ptrFromInt(3 * @sizeOf(f32)));
     c.glEnableVertexAttribArray(1);
     // texture coord attribute
     c.glVertexAttribPointer(2, 2, c.GL_FLOAT, c.GL_FALSE, stride, @ptrFromInt(6 * @sizeOf(f32)));
