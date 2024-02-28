@@ -267,6 +267,7 @@ fn render(texture: ?[]const u8, width: c_int, height: c_int) void {
     }
 
     const shaderProgram = c.glCreateProgram();
+
     c.glAttachShader(shaderProgram, vshader);
     c.glAttachShader(shaderProgram, fshader);
     c.glLinkProgram(shaderProgram);
@@ -283,10 +284,10 @@ fn render(texture: ?[]const u8, width: c_int, height: c_int) void {
 
     const vertices = &[_]f32{
         // positions    // colors       // texture coords
-        0.5, 0.5, 0.0, 1.0, 0.0, 0.0, 1.0, 1.0, // top right
-        0.5, -0.5, 0.0, 0.0, 1.0, 0.0, 1.0, 0.0, // bottom right
-        -0.5, -0.5, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, // bottom left
-        -0.5, 0.5, 0.0, 1.0, 1.0, 0.0, 0.0, 1.0, // top left
+        1.0, 1.0, 0.0, 1.0, 0.0, 0.0, 1.0, 1.0, // top right
+        1.0, -1.0, 0.0, 0.0, 1.0, 0.0, 1.0, 0.0, // bottom right
+        -1.0, -1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, // bottom left
+        -1.0, 1.0, 0.0, 1.0, 1.0, 0.0, 0.0, 1.0, // top left
     };
 
     const indices = &[_]u8{
@@ -331,7 +332,7 @@ fn render(texture: ?[]const u8, width: c_int, height: c_int) void {
 
     c.glTexParameteri(c.GL_TEXTURE_2D, c.GL_TEXTURE_WRAP_S, c.GL_CLAMP_TO_EDGE);
     c.glTexParameteri(c.GL_TEXTURE_2D, c.GL_TEXTURE_WRAP_T, c.GL_CLAMP_TO_EDGE);
-    c.glTexParameteri(c.GL_TEXTURE_2D, c.GL_TEXTURE_MIN_FILTER, c.GL_LINEAR);
+    c.glTexParameteri(c.GL_TEXTURE_2D, c.GL_TEXTURE_MIN_FILTER, c.GL_LINEAR_MIPMAP_LINEAR);
     c.glTexParameteri(c.GL_TEXTURE_2D, c.GL_TEXTURE_MAG_FILTER, c.GL_LINEAR);
 
     c.glTexImage2D(
@@ -348,7 +349,7 @@ fn render(texture: ?[]const u8, width: c_int, height: c_int) void {
 
     c.glGenerateMipmap(c.GL_TEXTURE_2D);
 
-    c.glClearColor(0.0, 0.0, 0.1, 1.0);
+    c.glClearColor(0.0, 0.0, 0.0, 1.0);
     c.glClear(c.GL_COLOR_BUFFER_BIT);
 
     c.glDrawElements(c.GL_TRIANGLES, 6, c.GL_UNSIGNED_BYTE, @ptrFromInt(0));
