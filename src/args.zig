@@ -9,10 +9,12 @@ pub const Opts = struct {
     help: bool = false,
     outputs: bool = false,
     json: bool = false,
+    target: ?[]const u8 = null,
 
     pub const shorthands = .{
         .h = "help",
         .j = "json",
+        .t = "target",
     };
 };
 
@@ -24,9 +26,11 @@ const help_msg =
     \\usage: {[a0]s} [options] <commands>
     \\
     \\Options:
+    \\    --target, -t      Target output to set wallpaper
     \\    --json, -j        Returns the result in json format
     \\
     \\Subcommands:
+    \\    {[a0]s} wallpaper             Set wallpaper to output
     \\    {[a0]s} outputs               Lists the monitors currently available
     \\    {[a0]s} help                  Print this help and exit
 ;

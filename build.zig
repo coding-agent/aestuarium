@@ -20,6 +20,13 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     }).module("json");
 
+    const ini_mod = b.dependency("ini", .{
+        .target = target,
+        .optimize = optimize,
+    }).module("ini");
+
+    const known_folders_mod = b.dependency("known-folders", .{}).module("known-folders");
+
     const scanner = Scanner.create(b, .{});
     const wayland_mod = scanner.mod;
 
@@ -34,6 +41,8 @@ pub fn build(b: *std.Build) void {
     exe.root_module.addImport("zig-args", zig_args_mod);
     exe.root_module.addImport("zigimg", zigimg_mod);
     exe.root_module.addImport("json", getty_mod);
+    exe.root_module.addImport("ini", ini_mod);
+    exe.root_module.addImport("known-folders", known_folders_mod);
 
     scanner.addSystemProtocol("stable/xdg-shell/xdg-shell.xml");
     scanner.addSystemProtocol("unstable/xdg-output/xdg-output-unstable-v1.xml");

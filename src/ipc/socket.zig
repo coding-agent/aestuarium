@@ -19,7 +19,6 @@ pub fn init() !void {
         error.PathAlreadyExists => {},
         else => return err,
     };
-    fs.deleteFileAbsolute("/tmp/aestuarium/.aestuarium.sock") catch {};
     defer fs.deleteFileAbsolute("/tmp/aestuarium/.aestuarium.sock") catch {};
 
     const address = try std.net.Address.initUnix(path);

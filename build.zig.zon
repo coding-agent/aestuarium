@@ -1,6 +1,6 @@
 .{
     .name = "aestuarium",
-    .version = "0.0.0",
+    .version = "0.0.1",
 
     .paths = .{""},
 
@@ -20,6 +20,14 @@
         .json = .{
             .url = "git+https://github.com/getty-zig/json#6935f474db886b4a990652a9905b11cf49b1e110",
             .hash = "1220a6a7706fa609ce63e2bf61812515f6ab45273397ca591f925a32e7e507cb7cec",
+        },
+        .@"known-folders" = .{
+            .url = "git+https://github.com/coding-agent/known-folders#master",
+            .hash = "12204a8a7e9184a77f70795b1fc8a9f94dff5cce208c20c5c6452967dddc498e0b64",
+        },
+        .ini = .{
+            .url = "git+https://github.com/coding-agent/ini#26e4fe7d3ecbe7235744c86c9b00e0f8735fc616",
+            .hash = "1220cd56f45f8a8300a8dc074c29075847bb061b84485a020ea6d73244dae50af518",
         },
     },
 }

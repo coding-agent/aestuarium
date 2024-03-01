@@ -16,6 +16,7 @@ const OutputInfo = struct {
     width: i32 = 0,
     x: i32 = 0,
     y: i32 = 0,
+    wl: *wl.Output,
 
     pub fn deinit(self: OutputInfo, alloc: std.mem.Allocator) void {
         if (self.name) |name| alloc.free(name);
@@ -44,7 +45,7 @@ pub fn init(alloc: std.mem.Allocator, globals: Globals) !Outputs {
     }
 
     for (globals.outputs.items, 0..) |wl_output, i| {
-        var info = OutputInfo{};
+        var info = OutputInfo{ .wl = wl_output };
         const xdg_output = try globals.xdg_output_manager.?.getXdgOutput(wl_output);
         defer xdg_output.destroy();
         xdg_output.setListener(
@@ -67,12 +68,38 @@ pub fn deinit(self: Outputs, alloc: std.mem.Allocator) void {
     alloc.free(self.available_outputs);
 }
 
-/// Caller must free both the returned slice as well as its elements using the supplied allocator.
+// Caller must free both the returned slice as well as its elements using the supplied allocator.
 pub fn listOutputs(self: Outputs, allocator: std.mem.Allocator, options: ListOutputsOptions) ![][]u8 {
     if (options.json) {
         const json = @import("json");
         var formatted_list = try allocator.alloc([]u8, 1);
-        formatted_list[0] = @constCast(try json.toPrettySlice(allocator, self.available_outputs));
+
+        // TODO use serialization sbt to prevent memory allocations
+        const OutputInfoJson = struct {
+            name: ?[]const u8 = null,
+            description: ?[]const u8 = null,
+            height: i32 = 0,
+            width: i32 = 0,
+            x: i32 = 0,
+            y: i32 = 0,
+        };
+        var json_outputs = std.ArrayList(OutputInfoJson).init(allocator);
+        defer json_outputs.deinit();
+        for (self.available_outputs) |o| {
+            try json_outputs.append(.{
+                .name = o.name,
+                .description = o.description,
+                .height = o.height,
+                .width = o.width,
+                .x = o.x,
+                .y = o.y,
+            });
+        }
+
+        formatted_list[0] = @constCast(try json.toPrettySlice(
+            allocator,
+            json_outputs.items,
+        ));
         return formatted_list;
     }
 
@@ -104,9 +131,22 @@ pub fn listOutputs(self: Outputs, allocator: std.mem.Allocator, options: ListOut
 
 pub fn findOutputByName(self: Outputs, name: []const u8) ?OutputInfo {
     for (self.available_outputs) |output| {
-        if (std.mem.eql(u8, output.name, name)) return output;
+        if (std.mem.eql(u8, output.name.?, name)) return output;
     }
     return null;
+}
+
+pub fn findOutputByNameWithFallback(self: Outputs, name: ?[]const u8) OutputInfo {
+    // Fallback if not output given
+    if (name == null) {
+        return self.available_outputs[0];
+    }
+
+    for (self.available_outputs) |output| {
+        if (std.mem.eql(u8, output.name.?, name.?)) return output;
+    }
+
+    unreachable;
 }
 
 fn xdgOutputListener(
