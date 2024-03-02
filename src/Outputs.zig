@@ -17,10 +17,11 @@ const OutputInfo = struct {
     x: i32 = 0,
     y: i32 = 0,
     wl: *wl.Output,
+    allocator: Allocator,
 
-    pub fn deinit(self: OutputInfo, alloc: std.mem.Allocator) void {
-        if (self.name) |name| alloc.free(name);
-        if (self.description) |description| alloc.free(description);
+    pub fn deinit(self: OutputInfo) void {
+        if (self.name) |name| self.allocator.free(name);
+        if (self.description) |description| self.allocator.free(description);
     }
 };
 
@@ -29,6 +30,7 @@ const ListOutputsOptions = struct {
 };
 
 available_outputs: []OutputInfo,
+allocator: Allocator,
 
 const Outputs = @This();
 
@@ -40,12 +42,15 @@ const XdgOutputListenerData = struct {
 pub fn init(alloc: std.mem.Allocator, globals: Globals) !Outputs {
     var info_list = try alloc.alloc(OutputInfo, globals.outputs.items.len);
     errdefer {
-        for (info_list) |inf| inf.deinit(alloc);
+        for (info_list) |inf| inf.deinit();
         alloc.free(info_list);
     }
 
     for (globals.outputs.items, 0..) |wl_output, i| {
-        var info = OutputInfo{ .wl = wl_output };
+        var info = OutputInfo{
+            .wl = wl_output,
+            .allocator = alloc,
+        };
         const xdg_output = try globals.xdg_output_manager.?.getXdgOutput(wl_output);
         defer xdg_output.destroy();
         xdg_output.setListener(
@@ -60,12 +65,12 @@ pub fn init(alloc: std.mem.Allocator, globals: Globals) !Outputs {
         info_list[i] = info;
     }
 
-    return Outputs{ .available_outputs = info_list };
+    return Outputs{ .available_outputs = info_list, .allocator = alloc };
 }
 
-pub fn deinit(self: Outputs, alloc: std.mem.Allocator) void {
-    for (self.available_outputs) |inf| inf.deinit(alloc);
-    alloc.free(self.available_outputs);
+pub fn deinit(self: Outputs) void {
+    for (self.available_outputs) |inf| inf.deinit();
+    self.allocator.free(self.available_outputs);
 }
 
 // Caller must free both the returned slice as well as its elements using the supplied allocator.

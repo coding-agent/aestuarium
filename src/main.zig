@@ -5,9 +5,9 @@ const c = @import("ffi.zig");
 const args = @import("args.zig");
 const Globals = @import("Globals.zig");
 const Outputs = @import("Outputs.zig");
-const Ipc = @import("ipc/socket.zig");
 const Config = @import("Config.zig");
 const render = @import("render.zig");
+const Server = @import("ipc/Server.zig");
 
 const Allocator = std.mem.Allocator;
 
@@ -50,7 +50,7 @@ pub fn main() !u8 {
         defer globals.deinit();
 
         const outputs = try Outputs.init(alloc, globals);
-        defer outputs.deinit(alloc);
+        defer outputs.deinit();
 
         // TODO: make this directly write to a writer instead of allocating
         const output_list = try outputs.listOutputs(alloc, .{ .json = opts.options.json });
@@ -78,7 +78,6 @@ pub fn main() !u8 {
     // TODO check for existing instances of the app running
     std.log.info("Launching app...", .{});
     try runMainInstance(alloc);
-    //_ = try std.Thread.spawn(.{}, Ipc.init, .{});
     return 0;
 }
 
@@ -89,8 +88,18 @@ fn runMainInstance(alloc: Allocator) !void {
     var globals = try Globals.init(alloc);
     defer globals.deinit();
 
-    for (config.monitor_wallpapers) |mw| {
-        try render.setWallpaper(alloc, globals, mw.monitor, mw.wallpaper);
+    var rendered_outputs = try alloc.alloc(render, config.monitor_wallpapers.len);
+    defer alloc.free(rendered_outputs);
+
+    for (config.monitor_wallpapers, 0..) |mw, i| {
+        rendered_outputs[i] = try render.init(alloc, globals, mw.monitor, mw.wallpaper);
     }
+    defer for (rendered_outputs, 0..) |_, i| {
+        rendered_outputs[i].deinit();
+    };
+
     while (globals.display.dispatch() == .SUCCESS) {}
+
+    //var server = try Server.init(alloc);
+    //try server.run();
 }

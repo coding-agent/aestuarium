@@ -48,17 +48,13 @@ pub fn init(allocator: Allocator) !Config {
             .enumeration => {},
         }
     }
-    var mw = try allocator.alloc(MonitorWallpaper, monitor_wallpaper.items.len);
-    mw = try monitor_wallpaper.toOwnedSlice();
 
     return Config{
         .allocator = allocator,
-        .monitor_wallpapers = mw,
+        .monitor_wallpapers = try monitor_wallpaper.toOwnedSlice(),
     };
 }
 
 pub fn deinit(self: Config) void {
-    for (self.monitor_wallpapers) |_| {
-        self.allocator.free(self.monitor_wallpapers);
-    }
+    self.allocator.free(self.monitor_wallpapers);
 }
