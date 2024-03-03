@@ -1,4 +1,5 @@
 const std = @import("std");
+const Outputs = @import("Outputs.zig");
 const Allocator = std.mem.Allocator;
 
 const wayland = @import("wayland");
@@ -6,12 +7,14 @@ const wl = wayland.client.wl;
 const zxdg = wayland.client.zxdg;
 const zwlr = wayland.client.zwlr;
 
+alloc: Allocator,
 display: *wl.Display,
 outputs: std.ArrayList(*wl.Output),
 seat: ?*wl.Seat = null,
 compositor: ?*wl.Compositor = null,
 layer_shell: ?*zwlr.LayerShellV1 = null,
 xdg_output_manager: ?*zxdg.OutputManagerV1 = null,
+outputs_info: ?Outputs = null,
 
 const Globals = @This();
 
@@ -33,6 +36,7 @@ pub fn init(alloc: std.mem.Allocator) !Globals {
     defer registry.destroy();
 
     var self = Globals{
+        .alloc = alloc,
         .display = display,
         .outputs = std.ArrayList(*wl.Output).init(alloc),
     };
@@ -40,6 +44,14 @@ pub fn init(alloc: std.mem.Allocator) !Globals {
     registry.setListener(*Globals, Globals.registryListener, &self);
 
     if (display.roundtrip() != .SUCCESS) return error.RoundtripFail;
+
+    self.outputs_info = try Outputs.init(
+        alloc,
+        try self.outputs.toOwnedSlice(),
+        self.xdg_output_manager,
+        self.display,
+    );
+
     inline for (std.meta.fields(Globals)) |*f| {
         if (@typeInfo(@TypeOf(f.type)) == .Optional and
             @field(self, f.name) == null) return error.MissingRequiredGlobals;
@@ -51,6 +63,9 @@ pub fn init(alloc: std.mem.Allocator) !Globals {
 pub fn deinit(self: Globals) void {
     self.display.disconnect();
     self.outputs.deinit();
+    if (self.outputs_info) |*o| {
+        o.deinit();
+    }
 }
 
 fn registryListener(registry: *wl.Registry, ev: wl.Registry.Event, data: *Globals) void {
@@ -104,6 +119,9 @@ fn registryListener(registry: *wl.Registry, ev: wl.Registry.Event, data: *Global
             }
         },
 
-        .global_remove => {},
+        .global_remove => |global_remove| {
+            _ = global_remove; // autofix
+
+        },
     }
 }

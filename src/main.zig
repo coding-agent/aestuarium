@@ -6,7 +6,7 @@ const args = @import("args.zig");
 const Globals = @import("Globals.zig");
 const Outputs = @import("Outputs.zig");
 const Config = @import("Config.zig");
-const render = @import("render.zig");
+const Render = @import("Render.zig");
 const Server = @import("ipc/Server.zig");
 
 const Allocator = std.mem.Allocator;
@@ -49,11 +49,8 @@ pub fn main() !u8 {
         var globals = try Globals.init(alloc);
         defer globals.deinit();
 
-        const outputs = try Outputs.init(alloc, globals);
-        defer outputs.deinit();
-
         // TODO: make this directly write to a writer instead of allocating
-        const output_list = try outputs.listOutputs(alloc, .{ .json = opts.options.json });
+        const output_list = try globals.outputs_info.?.listOutputs(alloc, .{ .json = opts.options.json });
         defer {
             for (output_list) |o| alloc.free(o);
             alloc.free(output_list);
@@ -88,18 +85,24 @@ fn runMainInstance(alloc: Allocator) !void {
     var globals = try Globals.init(alloc);
     defer globals.deinit();
 
-    var rendered_outputs = try alloc.alloc(render, config.monitor_wallpapers.len);
+    var rendered_outputs = try alloc.alloc(Render, config.monitor_wallpapers.len);
+
     defer alloc.free(rendered_outputs);
 
     for (config.monitor_wallpapers, 0..) |mw, i| {
-        rendered_outputs[i] = try render.init(alloc, globals, mw.monitor, mw.wallpaper);
+        const output_info = globals.outputs_info.?.findOutputByNameWithFallback(mw.monitor);
+        rendered_outputs[i] = try Render.init(
+            alloc,
+            globals.compositor,
+            globals.display,
+            globals.layer_shell,
+            output_info,
+        );
+        try rendered_outputs[i].setWallpaper(mw.wallpaper);
     }
     defer for (rendered_outputs, 0..) |_, i| {
         rendered_outputs[i].deinit();
     };
 
     while (globals.display.dispatch() == .SUCCESS) {}
-
-    //var server = try Server.init(alloc);
-    //try server.run();
 }

@@ -9,7 +9,7 @@ const zwlr = wayland.client.zwlr;
 
 const Globals = @import("Globals.zig");
 
-const OutputInfo = struct {
+pub const OutputInfo = struct {
     name: ?[]const u8 = null,
     description: ?[]const u8 = null,
     height: i32 = 0,
@@ -39,19 +39,19 @@ const XdgOutputListenerData = struct {
     alloc: std.mem.Allocator,
 };
 
-pub fn init(alloc: std.mem.Allocator, globals: Globals) !Outputs {
-    var info_list = try alloc.alloc(OutputInfo, globals.outputs.items.len);
+pub fn init(alloc: std.mem.Allocator, wl_outputs: []*wl.Output, xdg_output_manager: ?*zxdg.OutputManagerV1, display: *wl.Display) !Outputs {
+    var info_list = try alloc.alloc(OutputInfo, wl_outputs.len);
     errdefer {
         for (info_list) |inf| inf.deinit();
         alloc.free(info_list);
     }
 
-    for (globals.outputs.items, 0..) |wl_output, i| {
+    for (wl_outputs, 0..) |wl_output, i| {
         var info = OutputInfo{
             .wl = wl_output,
             .allocator = alloc,
         };
-        const xdg_output = try globals.xdg_output_manager.?.getXdgOutput(wl_output);
+        const xdg_output = try xdg_output_manager.?.getXdgOutput(wl_output);
         defer xdg_output.destroy();
         xdg_output.setListener(
             *const XdgOutputListenerData,
@@ -61,7 +61,7 @@ pub fn init(alloc: std.mem.Allocator, globals: Globals) !Outputs {
                 .info = &info,
             },
         );
-        if (globals.display.roundtrip() != .SUCCESS) return error.RoundtripFail;
+        if (display.roundtrip() != .SUCCESS) return error.RoundtripFail;
         info_list[i] = info;
     }
 
@@ -142,16 +142,11 @@ pub fn findOutputByName(self: Outputs, name: []const u8) ?OutputInfo {
 }
 
 pub fn findOutputByNameWithFallback(self: Outputs, name: ?[]const u8) OutputInfo {
-    // Fallback if not output given
-    if (name == null) {
-        return self.available_outputs[0];
-    }
-
     for (self.available_outputs) |output| {
         if (std.mem.eql(u8, output.name.?, name.?)) return output;
     }
 
-    unreachable;
+    return self.available_outputs[0];
 }
 
 fn xdgOutputListener(
