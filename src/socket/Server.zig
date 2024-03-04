@@ -1,4 +1,6 @@
 const std = @import("std");
+const Globals = @import("../Globals.zig");
+
 const fs = std.fs;
 const Allocator = std.mem.Allocator;
 
@@ -7,8 +9,9 @@ const Server = @This();
 alloc: Allocator,
 stream_server: std.net.StreamServer,
 fd: c_int,
+globals: *Globals,
 
-pub fn init(alloc: Allocator) !Server {
+pub fn init(alloc: Allocator, globals: *Globals) !Server {
     var server = std.net.StreamServer.init(.{
         .reuse_port = true,
         .reuse_address = true,
@@ -25,14 +28,19 @@ pub fn init(alloc: Allocator) !Server {
         "{s}/aestuarium.sock",
         .{xdg_runtime_dir},
     );
+
+    std.fs.deleteFileAbsolute(socket_address) catch {};
+
     const address = try std.net.Address.initUnix(socket_address);
     try server.listen(address);
 
     std.log.info("Starting IPC server at {s}...", .{socket_address});
+
     return Server{
         .alloc = alloc,
         .stream_server = server,
         .fd = server.sockfd.?,
+        .globals = globals,
     };
 }
 
@@ -46,29 +54,38 @@ pub fn handleConnection(self: *Server) !void {
     var writer = connection.stream.writer();
     const response_size = try reader.readAll(&buff);
 
-    std.log.debug("incoming message: {s}", .{buff[0..response_size]});
-    const reply = try interpretMessage(buff[0..response_size]);
+    std.log.info("incoming message: {s}", .{buff[0..response_size]});
 
-    try writer.writeAll(reply);
-}
+    var it = std.mem.splitAny(u8, buff[0..response_size], " =");
 
-pub fn deinit(self: *Server) void {
-    self.stream_server.close();
-}
-
-fn interpretMessage(message: []const u8) ![]const u8 {
-    var it = std.mem.split(u8, message, " =");
-
-    if (it.next()) |word| {
-        if (std.mem.eql(u8, "wallpaper", word)) {
+    if (it.next()) |command| {
+        if (std.mem.eql(u8, "wallpaper", command)) {
             if (it.next()) |monitor| {
                 if (it.next()) |wallpaper| {
-                    var buf: [4096]u8 = undefined;
-                    return std.fmt.bufPrintZ(&buf, "{s}={s}", .{ monitor, wallpaper });
+                    if (self.globals.rendered_outputs) |rendered_outputs| {
+                        for (rendered_outputs, 0..) |output, i| {
+                            if (std.mem.eql(u8, output.output_info.name.?, monitor)) {
+                                // Trimming because socat add a trailing space
+                                self.globals.rendered_outputs.?[i].setWallpaper(std.mem.trim(u8, wallpaper, "\x0a")) catch |err| {
+                                    std.log.debug("{s}", .{@errorName(err)});
+                                    break;
+                                };
+                                try writer.writeAll("Changed successfully!");
+                                break;
+                            }
+                        }
+                    } else {
+                        // TODO initialize new output if available
+                        return error.RenderedOutputsNull;
+                    }
                 }
             }
         }
     }
 
-    return "unknown message";
+    try writer.writeByte('\n');
+}
+
+pub fn deinit(self: *Server) void {
+    self.stream_server.close();
 }

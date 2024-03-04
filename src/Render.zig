@@ -123,7 +123,7 @@ pub fn init(
 }
 
 pub fn setWallpaper(self: *Render, path: []const u8) !void {
-    var image = try zigimg.Image.fromFilePath(std.heap.c_allocator, path);
+    var image = try zigimg.Image.fromFilePath(self.allocator, path);
     defer image.deinit();
 
     const width: c_int = @intCast(image.width);
@@ -284,7 +284,7 @@ fn getEglError() !void {
         c.GL_INVALID_OPERATION => return error.GLInvalidOperation,
         c.GL_INVALID_FRAMEBUFFER_OPERATION => return error.GLInvalidFramebufferOperation,
         c.GL_OUT_OF_MEMORY => return error.OutOfMemory,
-        else => return error.Unkown,
+        else => return error.UnknownEglError,
     }
 }
 

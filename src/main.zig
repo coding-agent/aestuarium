@@ -77,14 +77,14 @@ pub fn main() !u8 {
 }
 
 fn runMainInstance(alloc: Allocator) !u8 {
-    std.log.info("Launching app...", .{});
+    std.log.info("Launching Aestuarium...", .{});
     var config = try Config.init(alloc);
     defer config.deinit();
 
     var globals = try Globals.init(alloc);
     defer globals.deinit();
 
-    const rendered_outputs = std.ArrayList(*Render).init(alloc);
+    var rendered_outputs = std.ArrayList(*Render).init(alloc);
     defer rendered_outputs.deinit();
 
     for (config.monitor_wallpapers) |mw| {
@@ -99,13 +99,17 @@ fn runMainInstance(alloc: Allocator) !u8 {
             globals.layer_shell,
             output_info,
         );
+        std.debug.print("{s}\n", .{mw.wallpaper});
         try rendered.setWallpaper(mw.wallpaper);
+        try rendered_outputs.append(&rendered);
     }
     defer for (rendered_outputs.items, 0..) |_, i| {
         rendered_outputs.items[i].deinit();
     };
 
-    var server = try Server.init(alloc);
+    globals.rendered_outputs = try rendered_outputs.toOwnedSlice();
+
+    var server = try Server.init(alloc, &globals);
     defer server.deinit();
 
     const display_fd = globals.display.getFd();
@@ -153,8 +157,4 @@ fn runMainInstance(alloc: Allocator) !u8 {
     }
 
     return 0;
-}
-
-fn registryListener(display: *wl.Display) !void {
-    while (display.dispatch() == .SUCCESS) {}
 }

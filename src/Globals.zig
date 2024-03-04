@@ -1,5 +1,7 @@
 const std = @import("std");
 const Outputs = @import("Outputs.zig");
+const Render = @import("Render.zig");
+
 const Allocator = std.mem.Allocator;
 
 const wayland = @import("wayland");
@@ -15,6 +17,7 @@ compositor: ?*wl.Compositor = null,
 layer_shell: ?*zwlr.LayerShellV1 = null,
 xdg_output_manager: ?*zxdg.OutputManagerV1 = null,
 outputs_info: ?Outputs = null,
+rendered_outputs: ?[]*Render = null,
 
 const Globals = @This();
 
@@ -63,8 +66,11 @@ pub fn init(alloc: std.mem.Allocator) !Globals {
 pub fn deinit(self: Globals) void {
     self.display.disconnect();
     self.outputs.deinit();
-    if (self.outputs_info) |*o| {
-        o.deinit();
+    if (self.outputs_info) |*output_info| {
+        output_info.deinit();
+    }
+    if (self.rendered_outputs != null) {
+        self.alloc.free(self.rendered_outputs.?);
     }
 }
 
