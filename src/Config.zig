@@ -16,28 +16,30 @@ const Config = @This();
 
 allocator: Allocator,
 monitor_wallpapers: []MonitorWallpaper,
+parser: ini.Parser(std.fs.File.Reader),
 
 pub fn init(allocator: Allocator) !Config {
-    const config_dir = try kf.open(allocator, .roaming_configuration, .{});
-    const config_file = try config_dir.?.openFile("aestuarium/config.ini", .{});
+    var config_dir = try kf.open(allocator, .roaming_configuration, .{});
+    defer config_dir.?.close();
+    var config_file = try config_dir.?.openFile("aestuarium/config.ini", .{});
+    defer config_file.close();
 
     var parser = ini.parse(allocator, config_file.reader());
 
     var monitor_wallpaper = std.ArrayList(MonitorWallpaper).init(allocator);
-    defer monitor_wallpaper.deinit();
 
     var current_header: Heading = undefined;
 
     while (try parser.next()) |record| {
         switch (record) {
             .section => |heading| {
-                current_header = std.meta.stringToEnum(Heading, heading) orelse return error.UnkownHeadingConfigFile;
+                current_header = std.meta.stringToEnum(Heading, heading) orelse return error.UnknownHeadingConfigFile;
             },
 
             .property => |kv| {
                 switch (current_header) {
                     .monitors => {
-                        try monitor_wallpaper.append(MonitorWallpaper{
+                        try monitor_wallpaper.append(.{
                             .monitor = kv.key,
                             .wallpaper = kv.value,
                         });
@@ -52,9 +54,11 @@ pub fn init(allocator: Allocator) !Config {
     return Config{
         .allocator = allocator,
         .monitor_wallpapers = try monitor_wallpaper.toOwnedSlice(),
+        .parser = parser,
     };
 }
 
-pub fn deinit(self: Config) void {
+pub fn deinit(self: *Config) void {
     self.allocator.free(self.monitor_wallpapers);
+    self.parser.deinit();
 }

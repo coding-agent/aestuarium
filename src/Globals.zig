@@ -47,7 +47,7 @@ pub fn init(alloc: std.mem.Allocator) !Globals {
 
     self.outputs_info = try Outputs.init(
         alloc,
-        try self.outputs.toOwnedSlice(),
+        self.outputs.items,
         self.xdg_output_manager,
         self.display,
     );
@@ -119,9 +119,9 @@ fn registryListener(registry: *wl.Registry, ev: wl.Registry.Event, data: *Global
             }
         },
 
-        .global_remove => |global_remove| {
-            _ = global_remove; // autofix
-
+        .global_remove => |remove_event| {
+            //TODO handle output removed
+            std.log.warn("Global Removed {}", .{remove_event.name});
         },
     }
 }

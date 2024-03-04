@@ -6,6 +6,7 @@ const Server = @This();
 
 alloc: Allocator,
 stream_server: std.net.StreamServer,
+fd: c_int,
 
 pub fn init(alloc: Allocator) !Server {
     var server = std.net.StreamServer.init(.{
@@ -28,24 +29,17 @@ pub fn init(alloc: Allocator) !Server {
     try server.listen(address);
 
     std.log.info("Starting IPC server at {s}...", .{socket_address});
-
     return Server{
         .alloc = alloc,
         .stream_server = server,
+        .fd = server.sockfd.?,
     };
 }
 
-pub fn run(self: *Server) !void {
-    while (true) {
-        const connection = try self.stream_server.accept();
-        errdefer connection.stream.close();
-        (try std.Thread.spawn(.{}, handleConnection, .{ self, connection })).detach();
-    }
-}
-
-fn handleConnection(self: *Server, connection: std.net.StreamServer.Connection) !void {
-    _ = self; // autofix
+pub fn handleConnection(self: *Server) !void {
+    const connection = try self.stream_server.accept();
     defer connection.stream.close();
+    std.log.info("Accepting incoming connection...", .{});
 
     var buff: [std.fs.MAX_PATH_BYTES + 200]u8 = undefined;
     var reader = connection.stream.reader();
@@ -58,21 +52,20 @@ fn handleConnection(self: *Server, connection: std.net.StreamServer.Connection) 
     try writer.writeAll(reply);
 }
 
-pub fn deinit(self: *Server) !void {
+pub fn deinit(self: *Server) void {
     self.stream_server.close();
 }
 
 fn interpretMessage(message: []const u8) ![]const u8 {
-    var it = std.mem.split(u8, message, " ");
+    var it = std.mem.split(u8, message, " =");
 
     if (it.next()) |word| {
         if (std.mem.eql(u8, "wallpaper", word)) {
-            const path = it.next() orelse return "missing wallpaper path";
-            _ = path; // autofix
-            if (std.mem.eql(u8, "target", it.next().?)) {
-                const monitor = it.next() orelse return "missing target monitor";
-                _ = monitor; // autofix
-
+            if (it.next()) |monitor| {
+                if (it.next()) |wallpaper| {
+                    var buf: [4096]u8 = undefined;
+                    return std.fmt.bufPrintZ(&buf, "{s}={s}", .{ monitor, wallpaper });
+                }
             }
         }
     }

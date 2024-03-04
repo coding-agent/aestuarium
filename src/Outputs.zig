@@ -141,14 +141,6 @@ pub fn findOutputByName(self: Outputs, name: []const u8) ?OutputInfo {
     return null;
 }
 
-pub fn findOutputByNameWithFallback(self: Outputs, name: ?[]const u8) OutputInfo {
-    for (self.available_outputs) |output| {
-        if (std.mem.eql(u8, output.name.?, name.?)) return output;
-    }
-
-    return self.available_outputs[0];
-}
-
 fn xdgOutputListener(
     _: *zxdg.OutputV1,
     ev: zxdg.OutputV1.Event,

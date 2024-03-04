@@ -7,7 +7,7 @@ const Globals = @import("Globals.zig");
 const Outputs = @import("Outputs.zig");
 const Config = @import("Config.zig");
 const Render = @import("Render.zig");
-const Server = @import("ipc/Server.zig");
+const Server = @import("socket/Server.zig");
 
 const Allocator = std.mem.Allocator;
 
@@ -73,36 +73,88 @@ pub fn main() !u8 {
     }
 
     // TODO check for existing instances of the app running
-    std.log.info("Launching app...", .{});
-    try runMainInstance(alloc);
-    return 0;
+    return try runMainInstance(alloc);
 }
 
-fn runMainInstance(alloc: Allocator) !void {
-    const config = try Config.init(alloc);
+fn runMainInstance(alloc: Allocator) !u8 {
+    std.log.info("Launching app...", .{});
+    var config = try Config.init(alloc);
     defer config.deinit();
 
     var globals = try Globals.init(alloc);
     defer globals.deinit();
 
-    var rendered_outputs = try alloc.alloc(Render, config.monitor_wallpapers.len);
+    const rendered_outputs = std.ArrayList(*Render).init(alloc);
+    defer rendered_outputs.deinit();
 
-    defer alloc.free(rendered_outputs);
-
-    for (config.monitor_wallpapers, 0..) |mw, i| {
-        const output_info = globals.outputs_info.?.findOutputByNameWithFallback(mw.monitor);
-        rendered_outputs[i] = try Render.init(
+    for (config.monitor_wallpapers) |mw| {
+        const output_info = globals.outputs_info.?.findOutputByName(mw.monitor) orelse {
+            std.log.warn("Monitor {s} not found", .{mw.monitor});
+            continue;
+        };
+        var rendered = try Render.init(
             alloc,
             globals.compositor,
             globals.display,
             globals.layer_shell,
             output_info,
         );
-        try rendered_outputs[i].setWallpaper(mw.wallpaper);
+        try rendered.setWallpaper(mw.wallpaper);
     }
-    defer for (rendered_outputs, 0..) |_, i| {
-        rendered_outputs[i].deinit();
+    defer for (rendered_outputs.items, 0..) |_, i| {
+        rendered_outputs.items[i].deinit();
     };
 
-    while (globals.display.dispatch() == .SUCCESS) {}
+    var server = try Server.init(alloc);
+    defer server.deinit();
+
+    const display_fd = globals.display.getFd();
+
+    const epoll_fd = c.epoll_create1(0);
+    if (epoll_fd == -1) {
+        std.log.err("failed to create epoll fd", .{});
+        return 1;
+    }
+
+    var ev: c.epoll_event = undefined;
+    ev.events = c.EPOLLIN;
+    ev.data.fd = display_fd;
+    if (c.epoll_ctl(epoll_fd, c.EPOLL_CTL_ADD, display_fd, &ev) == -1) {
+        std.log.err("failed to add wayland display event to epoll", .{});
+        return 1;
+    }
+
+    ev.events = c.EPOLLIN;
+    ev.data.fd = server.fd;
+    if (c.epoll_ctl(epoll_fd, c.EPOLL_CTL_ADD, server.fd, &ev) == -1) {
+        std.log.err("failed to add socket server event to epoll", .{});
+        return 1;
+    }
+
+    while (true) {
+        var epoll_events: [2]c.epoll_event = undefined;
+        const ev_count = c.epoll_wait(epoll_fd, &epoll_events, 2, -1);
+        if (ev_count == -1) {
+            std.log.err("epoll wait failed", .{});
+            return 1;
+        }
+
+        var i: usize = 0;
+        while (i <= ev_count) : (i += 1) {
+            if (epoll_events[i].data.fd == display_fd) {
+                std.log.info("epoll display global event", .{});
+                if (globals.display.dispatch() != .SUCCESS) return error.foo;
+            }
+            if (epoll_events[i].data.fd == server.fd) {
+                std.log.info("epoll socket server event", .{});
+                try server.handleConnection();
+            }
+        }
+    }
+
+    return 0;
+}
+
+fn registryListener(display: *wl.Display) !void {
+    while (display.dispatch() == .SUCCESS) {}
 }
