@@ -46,19 +46,30 @@ pub fn init(alloc: Allocator, globals: *Globals) !Server {
 
 pub fn handleConnection(self: *Server) !void {
     const connection = try self.stream_server.accept();
-    defer connection.stream.close();
+    errdefer connection.stream.close();
+
     std.log.info("Accepting incoming connection...", .{});
 
     var buff: [std.fs.MAX_PATH_BYTES + 200]u8 = undefined;
-    var reader = connection.stream.reader();
-    var writer = connection.stream.writer();
-    const response_size = try reader.readAll(&buff);
+    const response_size = try connection.stream.read(&buff);
 
     std.log.info("incoming message: {s}", .{buff[0..response_size]});
 
     var it = std.mem.splitAny(u8, buff[0..response_size], " =");
 
     if (it.next()) |command| {
+        if (std.mem.eql(u8, "preload", command)) {
+            if (it.next()) |wallpaper| {
+                self.globals.preloaded.?.preload(std.mem.trim(u8, wallpaper, "\x0a")) catch |err| {
+                    std.log.err("{s}", .{@errorName(err)});
+                    _ = try connection.stream.write(@errorName(err));
+                    return;
+                };
+                _ = try connection.stream.write("preloaded successfully");
+                return;
+            }
+        }
+
         if (std.mem.eql(u8, "wallpaper", command)) {
             if (it.next()) |monitor| {
                 if (it.next()) |wallpaper| {
@@ -67,10 +78,11 @@ pub fn handleConnection(self: *Server) !void {
                             if (std.mem.eql(u8, output.output_info.name.?, monitor)) {
                                 // Trimming because socat add a trailing space
                                 self.globals.rendered_outputs.?[i].setWallpaper(std.mem.trim(u8, wallpaper, "\x0a")) catch |err| {
-                                    std.log.debug("{s}", .{@errorName(err)});
-                                    break;
+                                    std.log.err("{s}", .{@errorName(err)});
+                                    _ = try connection.stream.write(@errorName(err));
+                                    return;
                                 };
-                                try writer.writeAll("Changed successfully!");
+                                _ = try connection.stream.write("Changed successfully!\n");
                                 break;
                             }
                         }
@@ -79,11 +91,16 @@ pub fn handleConnection(self: *Server) !void {
                         return error.RenderedOutputsNull;
                     }
                 }
+                return;
+            }
+        }
+        if (std.mem.eql(u8, "unload", command)) {
+            if (it.next()) |wallpaper| {
+                self.globals.preloaded.?.unload(wallpaper);
+                _ = try connection.stream.write("Unloaded successfully!\n");
             }
         }
     }
-
-    try writer.writeByte('\n');
 }
 
 pub fn deinit(self: *Server) void {

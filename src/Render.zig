@@ -1,12 +1,14 @@
 const std = @import("std");
 const c = @import("ffi.zig");
+const wayland = @import("wayland");
+const zigimg = @import("zigimg");
+
 const Globals = @import("Globals.zig");
 const OutputInfo = @import("Outputs.zig").OutputInfo;
-const Allocator = std.mem.Allocator;
-const zigimg = @import("zigimg");
-const Image = zigimg.Image;
+const Preload = @import("Preload.zig");
 
-const wayland = @import("wayland");
+const Allocator = std.mem.Allocator;
+const Image = zigimg.Image;
 const wl = wayland.client.wl;
 const zxdg = wayland.client.zxdg;
 const zwlr = wayland.client.zwlr;
@@ -21,6 +23,7 @@ egl_context: c.EGLContext,
 egl_window: *wl.EglWindow,
 egl_surface: c.EGLSurface,
 output_info: OutputInfo,
+preload: *Preload,
 
 pub fn init(
     alloc: Allocator,
@@ -28,6 +31,7 @@ pub fn init(
     display: *wl.Display,
     layer_shell: ?*zwlr.LayerShellV1,
     output_info: OutputInfo,
+    preload: *Preload,
 ) !Render {
     const surface = try compositor.?.createSurface();
 
@@ -119,16 +123,12 @@ pub fn init(
         .layer = layer_surface,
         .surface = surface,
         .output_info = output_info,
+        .preload = preload,
     };
 }
 
 pub fn setWallpaper(self: *Render, path: []const u8) !void {
-    var image = try zigimg.Image.fromFilePath(self.allocator, path);
-    defer image.deinit();
-
-    const width: c_int = @intCast(image.width);
-    const height: c_int = @intCast(image.height);
-    const texture = image.rawBytes();
+    const preloaded = self.preload.findPreloaded(path) orelse return error.ImageNotPreloaded;
 
     // Vertex Shader
     const vertexShaderSource = @embedFile("shaders/main_vertex_shader.glsl");
@@ -246,13 +246,13 @@ pub fn setWallpaper(self: *Render, path: []const u8) !void {
     c.glTexImage2D(
         c.GL_TEXTURE_2D,
         0,
-        c.GL_RGBA,
-        width,
-        height,
+        preloaded.format,
+        preloaded.width,
+        preloaded.height,
         0,
-        c.GL_RGBA,
+        @intCast(preloaded.format),
         c.GL_UNSIGNED_BYTE,
-        texture.ptr,
+        preloaded.bytes.ptr,
     );
 
     c.glGenerateMipmap(c.GL_TEXTURE_2D);
@@ -262,7 +262,6 @@ pub fn setWallpaper(self: *Render, path: []const u8) !void {
 
     c.glDrawElements(c.GL_TRIANGLES, 6, c.GL_UNSIGNED_BYTE, @ptrFromInt(0));
 
-    try getEglError();
     try getEglError();
     // swap double-buffered framebuffer
     if (c.eglSwapBuffers(self.egl_display, self.egl_surface) != c.EGL_TRUE) return error.EGLError;

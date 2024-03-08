@@ -8,13 +8,9 @@ const Outputs = @import("Outputs.zig");
 const Config = @import("Config.zig");
 const Render = @import("Render.zig");
 const Server = @import("socket/Server.zig");
+const Preload = @import("Preload.zig");
 
 const Allocator = std.mem.Allocator;
-
-const wayland = @import("wayland");
-const wl = wayland.client.wl;
-const zxdg = wayland.client.zxdg;
-const zwlr = wayland.client.zwlr;
 
 pub const std_options = .{
     .logFn = @import("log.zig").log,
@@ -87,19 +83,27 @@ fn runMainInstance(alloc: Allocator) !u8 {
     var rendered_outputs = std.ArrayList(*Render).init(alloc);
     defer rendered_outputs.deinit();
 
+    var preload = Preload.init(alloc);
+    defer preload.deinit();
+
+    globals.preloaded = &preload;
+
     for (config.monitor_wallpapers) |mw| {
         const output_info = globals.outputs_info.?.findOutputByName(mw.monitor) orelse {
             std.log.warn("Monitor {s} not found", .{mw.monitor});
             continue;
         };
+
+        try preload.preload(mw.wallpaper);
+
         var rendered = try Render.init(
             alloc,
             globals.compositor,
             globals.display,
             globals.layer_shell,
             output_info,
+            &preload,
         );
-        std.debug.print("{s}\n", .{mw.wallpaper});
         try rendered.setWallpaper(mw.wallpaper);
         try rendered_outputs.append(&rendered);
     }
@@ -135,9 +139,10 @@ fn runMainInstance(alloc: Allocator) !u8 {
         return 1;
     }
 
+    const MAX_EVENT_COUNT: usize = 10;
     while (true) {
-        var epoll_events: [2]c.epoll_event = undefined;
-        const ev_count = c.epoll_wait(epoll_fd, &epoll_events, 2, -1);
+        var epoll_events: [MAX_EVENT_COUNT]c.epoll_event = undefined;
+        const ev_count = c.epoll_wait(epoll_fd, &epoll_events, MAX_EVENT_COUNT, -1);
         if (ev_count == -1) {
             std.log.err("epoll wait failed", .{});
             return 1;
@@ -147,7 +152,7 @@ fn runMainInstance(alloc: Allocator) !u8 {
         while (i <= ev_count) : (i += 1) {
             if (epoll_events[i].data.fd == display_fd) {
                 std.log.info("epoll display global event", .{});
-                if (globals.display.dispatch() != .SUCCESS) return error.foo;
+                if (globals.display.roundtrip() != .SUCCESS) return error.RoundTripFail;
             }
             if (epoll_events[i].data.fd == server.fd) {
                 std.log.info("epoll socket server event", .{});

@@ -1,6 +1,7 @@
 const std = @import("std");
 const Outputs = @import("Outputs.zig");
 const Render = @import("Render.zig");
+const Preload = @import("Preload.zig");
 
 const Allocator = std.mem.Allocator;
 
@@ -18,6 +19,7 @@ layer_shell: ?*zwlr.LayerShellV1 = null,
 xdg_output_manager: ?*zxdg.OutputManagerV1 = null,
 outputs_info: ?Outputs = null,
 rendered_outputs: ?[]*Render = null,
+preloaded: ?*Preload = null,
 
 const Globals = @This();
 
@@ -127,7 +129,7 @@ fn registryListener(registry: *wl.Registry, ev: wl.Registry.Event, data: *Global
 
         .global_remove => |remove_event| {
             //TODO handle output removed
-            std.log.warn("Global Removed {}", .{remove_event.name});
+            std.log.warn("Global Removed {}", .{remove_event});
         },
     }
 }
