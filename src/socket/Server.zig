@@ -65,7 +65,7 @@ pub fn handleConnection(self: *Server) !void {
                     _ = try connection.stream.write(@errorName(err));
                     return;
                 };
-                _ = try connection.stream.write("preloaded successfully");
+                _ = try connection.stream.write("preloaded successfully\n");
                 return;
             }
         }
@@ -80,6 +80,7 @@ pub fn handleConnection(self: *Server) !void {
                                 self.globals.rendered_outputs.?[i].setWallpaper(std.mem.trim(u8, wallpaper, "\x0a")) catch |err| {
                                     std.log.err("{s}", .{@errorName(err)});
                                     _ = try connection.stream.write(@errorName(err));
+                                    connection.stream.close();
                                     return;
                                 };
                                 _ = try connection.stream.write("Changed successfully!\n");

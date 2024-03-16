@@ -8,6 +8,7 @@ const Outputs = @import("Outputs.zig");
 const Config = @import("Config.zig");
 const Render = @import("Render.zig");
 const Server = @import("socket/Server.zig");
+const Client = @import("socket/Client.zig");
 const Preload = @import("Preload.zig");
 
 const Allocator = std.mem.Allocator;
@@ -66,6 +67,28 @@ pub fn main() !u8 {
     if (opts.options.json) {
         try args.printHelp(alloc);
         return 1;
+    }
+
+    const cl_state = if (opts.options.preload != null or opts.options.wallpaper != null or opts.options.unload != null) true else false;
+    if (opts.options.preload) |path| {
+        var client = try Client.init(alloc);
+        try client.preload(path);
+        client.deinit();
+    }
+
+    if (opts.options.wallpaper) |path| {
+        var client = try Client.init(alloc);
+        try client.wallpaper(opts.options.monitor, path);
+        client.deinit();
+    }
+    if (opts.options.unload) |path| {
+        var client = try Client.init(alloc);
+        try client.unload(path);
+        client.deinit();
+    }
+
+    if (cl_state) {
+        return 0;
     }
 
     // TODO check for existing instances of the app running
@@ -151,11 +174,9 @@ fn runMainInstance(alloc: Allocator) !u8 {
         var i: usize = 0;
         while (i <= ev_count) : (i += 1) {
             if (epoll_events[i].data.fd == display_fd) {
-                std.log.info("epoll display global event", .{});
                 if (globals.display.roundtrip() != .SUCCESS) return error.RoundTripFail;
             }
             if (epoll_events[i].data.fd == server.fd) {
-                std.log.info("epoll socket server event", .{});
                 try server.handleConnection();
             }
         }

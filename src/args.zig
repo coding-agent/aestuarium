@@ -9,30 +9,38 @@ pub const Opts = struct {
     help: bool = false,
     outputs: bool = false,
     json: bool = false,
-    target: ?[]const u8 = null,
+    monitor: ?[]const u8 = null,
+    preload: ?[]const u8 = null,
+    unload: ?[]const u8 = null,
+    wallpaper: ?[]const u8 = null,
 
     pub const shorthands = .{
         .h = "help",
         .j = "json",
-        .t = "target",
+        .m = "monitor",
+        .p = "preload",
+        .u = "unload",
+        .w = "wallpaper",
     };
 };
 
 pub const Args = union(enum) {};
 
 const help_msg =
-    \\Aestuarium v{[version]s} - yet another wayland background manager 
+    \\Aestuarium v{[version]s} - yet another wayland wallpaper manager 
     \\
     \\usage: {[a0]s} [options] <commands>
     \\
     \\Options:
-    \\    --target, -t      Target output to set wallpaper
     \\    --json, -j        Returns the result in json format
+    \\    --monitor, -m     Monitor to set wallpaper
     \\
     \\Subcommands:
-    \\    {[a0]s} wallpaper             Set wallpaper to output
-    \\    {[a0]s} outputs               Lists the monitors currently available
-    \\    {[a0]s} help                  Print this help and exit
+    \\    {[a0]s} preload   <path>          Preload file into memory
+    \\    {[a0]s} wallpaper <path>          Set wallpaper to output
+    \\    {[a0]s} unload    <path/"all">    Unload file/s from memory
+    \\    {[a0]s} outputs                   Lists the monitors currently available
+    \\    {[a0]s} help                      Print this help and exit
 ;
 
 pub fn printHelp(alloc: Allocator) !void {

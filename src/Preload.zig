@@ -16,6 +16,7 @@ const Preloaded = struct {
     height: c_int,
     width: c_int,
     bytes: []const u8,
+    // OpenGL Format
     format: c_int,
     zigimg: *Image,
 };
@@ -37,7 +38,6 @@ pub fn preload(self: *Preload, path: []const u8) !void {
 
     var preloaded = try self.alloc.create(Preloaded);
 
-    std.debug.print("to preload: {s}", .{path});
     const new_mem_path = try self.alloc.alloc(u8, path.len);
     @memcpy(new_mem_path, path);
     preloaded.path = new_mem_path;
