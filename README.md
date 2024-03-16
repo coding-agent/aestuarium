@@ -30,6 +30,12 @@ You can unload a specific preloaded file or all
 aestuarium --unload all
 ```
 
+For further help
+
+```shell
+aestuarium --help
+```
+
 ### Configuration
 
 You can configure aestuarium by creating a `config.ini` file in the `$XDG_CONFIG_DIRS/aestuarium/` folder or refer to [known-folders](https://github.com/ziglibs/known-folders) if you are not in linux.
