@@ -34,8 +34,6 @@ pub fn init(alloc: Allocator, globals: *Globals) !Server {
     const address = try std.net.Address.initUnix(socket_address);
     try server.listen(address);
 
-    std.log.info("Starting IPC server at {s}...", .{socket_address});
-
     return Server{
         .alloc = alloc,
         .stream_server = server,
@@ -48,12 +46,8 @@ pub fn handleConnection(self: *Server) !void {
     const connection = try self.stream_server.accept();
     errdefer connection.stream.close();
 
-    std.log.info("Accepting incoming connection...", .{});
-
     var buff: [std.fs.MAX_PATH_BYTES + 200]u8 = undefined;
     const response_size = try connection.stream.read(&buff);
-
-    std.log.info("incoming message: {s}", .{buff[0..response_size]});
 
     var it = std.mem.splitAny(u8, buff[0..response_size], " =");
 

@@ -111,7 +111,7 @@ fn runMainInstance(alloc: Allocator) !u8 {
 
     globals.preloaded = &preload;
 
-    for (config.monitor_wallpapers) |mw| {
+    for (config.monitor_wallpapers.items) |mw| {
         const output_info = globals.outputs_info.?.findOutputByName(mw.monitor) orelse {
             std.log.warn("Monitor {s} not found", .{mw.monitor});
             continue;
@@ -126,6 +126,8 @@ fn runMainInstance(alloc: Allocator) !u8 {
             globals.layer_shell,
             output_info,
             &preload,
+            config.vertex_shader,
+            config.fragment_shader,
         );
         try rendered.setWallpaper(mw.wallpaper);
         try rendered_outputs.append(&rendered);

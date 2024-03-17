@@ -24,6 +24,8 @@ egl_window: *wl.EglWindow,
 egl_surface: c.EGLSurface,
 output_info: OutputInfo,
 preload: *Preload,
+vertex: ?[]const u8,
+fragment: ?[]const u8,
 
 pub fn init(
     alloc: Allocator,
@@ -32,6 +34,8 @@ pub fn init(
     layer_shell: ?*zwlr.LayerShellV1,
     output_info: OutputInfo,
     preload: *Preload,
+    vertex_shader: ?[]const u8,
+    fragment_shader: ?[]const u8,
 ) !Render {
     const surface = try compositor.?.createSurface();
 
@@ -124,33 +128,57 @@ pub fn init(
         .surface = surface,
         .output_info = output_info,
         .preload = preload,
+        .vertex = vertex_shader,
+        .fragment = fragment_shader,
     };
 }
 
-pub fn setWallpaper(self: *Render, path: []const u8) !void {
-    const preloaded = self.preload.findPreloaded(path) orelse return error.ImageNotPreloaded;
+pub fn setWallpaper(
+    self: *Render,
+    wallpaper_path: []const u8,
+) !void {
+    const preloaded = self.preload.findPreloaded(wallpaper_path) orelse return error.ImageNotPreloaded;
 
-    // Vertex Shader
-    const vertexShaderSource = @embedFile("shaders/main_vertex_shader.glsl");
-    // Fragment Shader
-    const fragmentShaderSource = @embedFile("shaders/main_fragment_shader.glsl");
+    var vertex_shader_source = try self.allocator.alloc(u8, 30_000);
+    var fragment_shader_source = try self.allocator.alloc(u8, 30_000);
+
+    defer self.allocator.free(vertex_shader_source);
+    defer self.allocator.free(fragment_shader_source);
 
     const vshader = c.glCreateShader(c.GL_VERTEX_SHADER);
     const fshader = c.glCreateShader(c.GL_FRAGMENT_SHADER);
+
     defer c.glDeleteShader(vshader);
     defer c.glDeleteShader(fshader);
+
+    if (self.vertex) |vertex| {
+        var vertex_shader_file = try std.fs.openFileAbsolute(vertex, .{});
+        defer vertex_shader_file.close();
+        vertex_shader_source = try vertex_shader_file.readToEndAlloc(self.allocator, 30_000);
+    } else {
+        vertex_shader_source = try self.allocator.dupe(u8, @embedFile("shaders/main_vertex_shader.glsl"));
+    }
+
+    if (self.fragment) |fragment| {
+        var fragment_shader_file = try std.fs.openFileAbsolute(fragment, .{});
+        defer fragment_shader_file.close();
+        fragment_shader_source = try fragment_shader_file.readToEndAlloc(self.allocator, 30_000);
+    } else {
+        fragment_shader_source = try self.allocator.dupe(u8, @embedFile("shaders/main_fragment_shader.glsl"));
+    }
 
     c.glShaderSource(
         vshader,
         1,
-        @ptrCast(&vertexShaderSource),
-        &[_]c_int{@as(c_int, @intCast(vertexShaderSource.len))},
+        @ptrCast(&vertex_shader_source),
+        &[_]c_int{@as(c_int, @intCast(vertex_shader_source.len))},
     );
+
     c.glShaderSource(
         fshader,
         1,
-        @ptrCast(&fragmentShaderSource),
-        &[_]c_int{@as(c_int, @intCast(fragmentShaderSource.len))},
+        @ptrCast(&fragment_shader_source),
+        &[_]c_int{@as(c_int, @intCast(fragment_shader_source.len))},
     );
 
     c.glCompileShader(vshader);

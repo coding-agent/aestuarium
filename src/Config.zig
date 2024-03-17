@@ -10,23 +10,32 @@ const MonitorWallpaper = struct {
 
 const Heading = enum {
     monitors,
+    shaders,
 };
 
 const Config = @This();
 
 allocator: Allocator,
-monitor_wallpapers: []MonitorWallpaper,
+monitor_wallpapers: std.ArrayList(MonitorWallpaper),
 parser: ini.Parser(std.fs.File.Reader),
+vertex_shader: ?[]const u8,
+fragment_shader: ?[]const u8,
 
 pub fn init(allocator: Allocator) !Config {
-    var config_dir = try kf.open(allocator, .roaming_configuration, .{});
-    defer config_dir.?.close();
-    var config_file = try config_dir.?.openFile("aestuarium/config.ini", .{});
+    var config_dir = try kf.open(allocator, .roaming_configuration, .{}) orelse return error.MissingConfigFile;
+    defer config_dir.close();
+    const config_path = try kf.getPath(allocator, .roaming_configuration);
+    var config_file = try config_dir.openFile("aestuarium/config.ini", .{});
     defer config_file.close();
 
     var parser = ini.parse(allocator, config_file.reader());
 
-    var monitor_wallpaper = std.ArrayList(MonitorWallpaper).init(allocator);
+    var monitor_wallpaper = std.ArrayList(MonitorWallpaper).init(std.heap.c_allocator);
+    var vertex_shader: ?[]const u8 = try allocator.alloc(u8, std.fs.MAX_PATH_BYTES);
+    var fragment_shader: ?[]const u8 = try allocator.alloc(u8, std.fs.MAX_PATH_BYTES);
+
+    vertex_shader = null;
+    fragment_shader = null;
 
     var current_header: Heading = undefined;
 
@@ -40,9 +49,19 @@ pub fn init(allocator: Allocator) !Config {
                 switch (current_header) {
                     .monitors => {
                         try monitor_wallpaper.append(.{
-                            .monitor = kv.key,
-                            .wallpaper = kv.value,
+                            .monitor = try allocator.dupe(u8, kv.key),
+                            .wallpaper = try allocator.dupe(u8, kv.value),
                         });
+                    },
+                    .shaders => {
+                        if (std.mem.eql(u8, "vertex", kv.key)) {
+                            var buf: [std.fs.MAX_PATH_BYTES]u8 = undefined;
+                            vertex_shader = try allocator.dupe(u8, try std.fmt.bufPrint(&buf, "{s}/aestuarium/{s}", .{ config_path.?, kv.value }));
+                        }
+                        if (std.mem.eql(u8, "fragment", kv.key)) {
+                            var buf: [std.fs.MAX_PATH_BYTES]u8 = undefined;
+                            fragment_shader = try allocator.dupe(u8, try std.fmt.bufPrint(&buf, "{s}/aestuarium/{s}", .{ config_path.?, kv.value }));
+                        }
                     },
                 }
             },
@@ -53,12 +72,20 @@ pub fn init(allocator: Allocator) !Config {
 
     return Config{
         .allocator = allocator,
-        .monitor_wallpapers = try monitor_wallpaper.toOwnedSlice(),
+        .monitor_wallpapers = monitor_wallpaper,
         .parser = parser,
+        .vertex_shader = vertex_shader,
+        .fragment_shader = fragment_shader,
     };
 }
 
 pub fn deinit(self: *Config) void {
-    self.allocator.free(self.monitor_wallpapers);
+    if (self.vertex_shader) |vs| {
+        self.allocator.free(vs);
+    }
+    if (self.fragment_shader) |fs| {
+        self.allocator.free(fs);
+    }
+    self.monitor_wallpapers.deinit();
     self.parser.deinit();
 }

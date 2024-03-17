@@ -83,7 +83,7 @@ pub fn unload(self: *Preload, path: []const u8) void {
 
 pub fn deinit(self: *Preload) void {
     for (self.preloaded_list.items) |preloaded| {
-        preloaded.zigimg.deinit();
+        //preloaded.zigimg.deinit();
         self.alloc.free(preloaded.path);
         self.alloc.destroy(preloaded);
     }
