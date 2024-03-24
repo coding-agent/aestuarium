@@ -46,6 +46,21 @@ Config template:
 [monitors]
 monitor1=/absolute/path/to/file.png
 ```
+### Supported File Formats
+
+The supported [formats]("https://github.com/zigimg/zigimg#supported-image-formats") yet are:
+- BMP (Partial)
+- GIF
+- PAM
+- PBM
+- PCX (Partial)
+- PGM (Partial)
+- PNG (Partial)
+- PPM
+- QOI
+- TGA
+
+Yes, it supports animations but you RAM might not like it.
 
 ### Dependencies
 
@@ -55,4 +70,5 @@ monitor1=/absolute/path/to/file.png
 - [ziglibs/known-folders](https://github.com/ziglibs/known-folders)
 - [ziglibs/ini](https://github.com/ziglibs/ini)
 - [MasterQ32/zig-args](https://github.com/MasterQ32/zig-args)
+
 
