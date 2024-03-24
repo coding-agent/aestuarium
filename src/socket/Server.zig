@@ -59,7 +59,7 @@ pub fn handleConnection(self: *Server) !void {
                     _ = try connection.stream.write(@errorName(err));
                     return;
                 };
-                _ = try connection.stream.write("preloaded successfully\n");
+                _ = try connection.stream.writer().print("Preloaded!\nCurrent mem usage {d}mb\n", .{self.globals.preloaded.?.mem_usage / (1024 * 1024)});
                 return;
             }
         }
@@ -77,7 +77,7 @@ pub fn handleConnection(self: *Server) !void {
                                     connection.stream.close();
                                     return;
                                 };
-                                _ = try connection.stream.write("Changed successfully!\n");
+                                _ = try connection.stream.writer().write("Changed successfully!\n");
                                 break;
                             }
                         }
@@ -88,11 +88,12 @@ pub fn handleConnection(self: *Server) !void {
                 }
                 return;
             }
+            _ = try connection.stream.write("wrong syntax");
         }
         if (std.mem.eql(u8, "unload", command)) {
             if (it.next()) |wallpaper| {
                 self.globals.preloaded.?.unload(wallpaper);
-                _ = try connection.stream.write("Unloaded successfully!\n");
+                _ = try connection.stream.writer().print("Unloaded!\nCurrent mem usage {d}MB\n", .{self.globals.preloaded.?.mem_usage});
             }
         }
     }

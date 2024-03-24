@@ -137,162 +137,324 @@ pub fn setWallpaper(
     self: *Render,
     wallpaper_path: []const u8,
 ) !void {
-    const preloaded = self.preload.findPreloaded(wallpaper_path) orelse return error.ImageNotPreloaded;
+    const preloaded = self.preload.findImageData(wallpaper_path) orelse return error.ImageNotPreloaded;
 
-    var vertex_shader_source = try self.allocator.alloc(u8, 30_000);
-    var fragment_shader_source = try self.allocator.alloc(u8, 30_000);
-
-    defer self.allocator.free(vertex_shader_source);
-    defer self.allocator.free(fragment_shader_source);
-
-    const vshader = c.glCreateShader(c.GL_VERTEX_SHADER);
-    const fshader = c.glCreateShader(c.GL_FRAGMENT_SHADER);
-
-    defer c.glDeleteShader(vshader);
-    defer c.glDeleteShader(fshader);
-
-    if (self.vertex) |vertex| {
-        var vertex_shader_file = try std.fs.openFileAbsolute(vertex, .{});
-        defer vertex_shader_file.close();
-        vertex_shader_source = try vertex_shader_file.readToEndAlloc(self.allocator, 30_000);
+    if (preloaded.is_animation) {
+        try renderAnimation(self, preloaded);
     } else {
-        vertex_shader_source = try self.allocator.dupe(u8, @embedFile("shaders/main_vertex_shader.glsl"));
+        var vertex_shader_source = try self.allocator.alloc(u8, 30_000);
+        var fragment_shader_source = try self.allocator.alloc(u8, 30_000);
+
+        defer self.allocator.free(vertex_shader_source);
+        defer self.allocator.free(fragment_shader_source);
+
+        const vshader = c.glCreateShader(c.GL_VERTEX_SHADER);
+        const fshader = c.glCreateShader(c.GL_FRAGMENT_SHADER);
+
+        defer c.glDeleteShader(vshader);
+        defer c.glDeleteShader(fshader);
+
+        if (self.vertex) |vertex| {
+            var vertex_shader_file = try std.fs.openFileAbsolute(vertex, .{});
+            defer vertex_shader_file.close();
+            vertex_shader_source = try vertex_shader_file.readToEndAlloc(self.allocator, 30_000);
+        } else {
+            vertex_shader_source = try self.allocator.dupe(u8, @embedFile("shaders/main_vertex_shader.glsl"));
+        }
+
+        if (self.fragment) |fragment| {
+            var fragment_shader_file = try std.fs.openFileAbsolute(fragment, .{});
+            defer fragment_shader_file.close();
+            fragment_shader_source = try fragment_shader_file.readToEndAlloc(self.allocator, 30_000);
+        } else {
+            fragment_shader_source = try self.allocator.dupe(u8, @embedFile("shaders/main_fragment_shader.glsl"));
+        }
+
+        c.glShaderSource(
+            vshader,
+            1,
+            @ptrCast(&vertex_shader_source),
+            &[_]c_int{@as(c_int, @intCast(vertex_shader_source.len))},
+        );
+
+        c.glShaderSource(
+            fshader,
+            1,
+            @ptrCast(&fragment_shader_source),
+            &[_]c_int{@as(c_int, @intCast(fragment_shader_source.len))},
+        );
+
+        c.glCompileShader(vshader);
+        c.glCompileShader(fshader);
+
+        // check vertex shader compilation errors
+        var vshader_success: c_int = 0;
+        c.glGetShaderiv(vshader, c.GL_COMPILE_STATUS, &vshader_success);
+        if (vshader_success == 0) {
+            var log: [512]u8 = undefined;
+            c.glGetShaderInfoLog(vshader, 512, null, &log);
+            std.log.err("vertext shader {s}", .{log});
+        }
+
+        var fshader_success: c_int = 0;
+        // check fragment shader compilation errors
+        c.glGetShaderiv(vshader, c.GL_COMPILE_STATUS, &fshader_success);
+        if (fshader_success == 0) {
+            var log: [512]u8 = undefined;
+            c.glGetShaderInfoLog(fshader, 512, null, &log);
+            std.log.err("fragment shader {s}", .{log});
+        }
+
+        const shaderProgram = c.glCreateProgram();
+
+        c.glAttachShader(shaderProgram, vshader);
+        c.glAttachShader(shaderProgram, fshader);
+        c.glLinkProgram(shaderProgram);
+        var link_success: c_int = undefined;
+        // check linking errors in shader program
+        c.glGetProgramiv(shaderProgram, c.GL_LINK_STATUS, &link_success);
+        if (link_success == 0) {
+            var log: [512]u8 = undefined;
+            c.glGetProgramInfoLog(shaderProgram, 512, null, &log);
+            std.log.err("shader program linking {s}", .{log});
+        }
+
+        c.glUseProgram(shaderProgram);
+
+        const vertices = &[_]f32{
+            // positions    // colors       // texture coords
+            1.0, 1.0, 0.0, 1.0, 0.0, 0.0, 1.0, 1.0, // top right
+            1.0, -1.0, 0.0, 0.0, 1.0, 0.0, 1.0, 0.0, // bottom right
+            -1.0, -1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, // bottom left
+            -1.0, 1.0, 0.0, 1.0, 1.0, 0.0, 0.0, 1.0, // top left
+        };
+
+        const indices = &[_]u8{
+            0, 1, 3, // first triangle
+            1, 2, 3, // second triangle
+        };
+        var VAO: c_uint = undefined;
+        var VBO: c_uint = undefined;
+        var EBO: c_uint = undefined;
+
+        c.glGenVertexArrays(1, &VAO);
+        c.glGenBuffers(1, &VBO);
+        c.glGenBuffers(1, &EBO);
+
+        defer c.glDeleteVertexArrays(1, &VAO);
+        defer c.glDeleteBuffers(1, &VBO);
+        defer c.glDeleteBuffers(1, &EBO);
+
+        c.glBindVertexArray(VAO);
+        c.glBindBuffer(c.GL_ARRAY_BUFFER, VBO);
+        c.glBufferData(c.GL_ARRAY_BUFFER, vertices.len * 4, vertices, c.GL_STATIC_DRAW);
+
+        c.glBindBuffer(c.GL_ELEMENT_ARRAY_BUFFER, EBO);
+        c.glBufferData(c.GL_ELEMENT_ARRAY_BUFFER, indices.len * 4, indices, c.GL_STATIC_DRAW);
+
+        const stride = 8 * @sizeOf(f32);
+        // position attribute
+        c.glVertexAttribPointer(0, 3, c.GL_FLOAT, c.GL_FALSE, stride, @ptrFromInt(0));
+        c.glEnableVertexAttribArray(0);
+        // color attribute
+        c.glVertexAttribPointer(1, 3, c.GL_FLOAT, c.GL_TRUE, stride, @ptrFromInt(3 * @sizeOf(f32)));
+        c.glEnableVertexAttribArray(1);
+        // texture coord attribute
+        c.glVertexAttribPointer(2, 2, c.GL_FLOAT, c.GL_FALSE, stride, @ptrFromInt(6 * @sizeOf(f32)));
+        c.glEnableVertexAttribArray(2);
+
+        c.glBindVertexArray(VAO);
+
+        var texture_id: c.GLuint = undefined;
+        c.glGenTextures(1, &texture_id);
+        c.glBindTexture(c.GL_TEXTURE_2D, texture_id);
+
+        c.glTexParameteri(c.GL_TEXTURE_2D, c.GL_TEXTURE_WRAP_S, c.GL_CLAMP_TO_EDGE);
+        c.glTexParameteri(c.GL_TEXTURE_2D, c.GL_TEXTURE_WRAP_T, c.GL_CLAMP_TO_EDGE);
+        c.glTexParameteri(c.GL_TEXTURE_2D, c.GL_TEXTURE_MIN_FILTER, c.GL_LINEAR_MIPMAP_LINEAR);
+        c.glTexParameteri(c.GL_TEXTURE_2D, c.GL_TEXTURE_MAG_FILTER, c.GL_LINEAR);
+
+        c.glTexImage2D(
+            c.GL_TEXTURE_2D,
+            0,
+            preloaded.format,
+            preloaded.width,
+            preloaded.height,
+            0,
+            @intCast(preloaded.format),
+            c.GL_UNSIGNED_BYTE,
+            preloaded.bytes[0].ptr,
+        );
+        c.glGenerateMipmap(c.GL_TEXTURE_2D);
+
+        c.glClearColor(0.0, 0.0, 0.0, 1.0);
+        c.glClear(c.GL_COLOR_BUFFER_BIT);
+
+        c.glDrawElements(c.GL_TRIANGLES, 6, c.GL_UNSIGNED_BYTE, @ptrFromInt(0));
+
+        try getEglError();
+        // swap double-buffered framebuffer
+        if (c.eglSwapBuffers(self.egl_display, self.egl_surface) != c.EGL_TRUE) return error.EGLError;
     }
+}
 
-    if (self.fragment) |fragment| {
-        var fragment_shader_file = try std.fs.openFileAbsolute(fragment, .{});
-        defer fragment_shader_file.close();
-        fragment_shader_source = try fragment_shader_file.readToEndAlloc(self.allocator, 30_000);
-    } else {
-        fragment_shader_source = try self.allocator.dupe(u8, @embedFile("shaders/main_fragment_shader.glsl"));
+fn renderAnimation(self: *Render, preloaded: *Preload.ImageData) !void {
+    for (preloaded.bytes) |frame| {
+        var vertex_shader_source = try self.allocator.alloc(u8, 30_000);
+        var fragment_shader_source = try self.allocator.alloc(u8, 30_000);
+
+        defer self.allocator.free(vertex_shader_source);
+        defer self.allocator.free(fragment_shader_source);
+
+        const vshader = c.glCreateShader(c.GL_VERTEX_SHADER);
+        const fshader = c.glCreateShader(c.GL_FRAGMENT_SHADER);
+
+        defer c.glDeleteShader(vshader);
+        defer c.glDeleteShader(fshader);
+
+        if (self.vertex) |vertex| {
+            var vertex_shader_file = try std.fs.openFileAbsolute(vertex, .{});
+            defer vertex_shader_file.close();
+            vertex_shader_source = try vertex_shader_file.readToEndAlloc(self.allocator, 30_000);
+        } else {
+            vertex_shader_source = try self.allocator.dupe(u8, @embedFile("shaders/main_vertex_shader.glsl"));
+        }
+
+        if (self.fragment) |fragment| {
+            var fragment_shader_file = try std.fs.openFileAbsolute(fragment, .{});
+            defer fragment_shader_file.close();
+            fragment_shader_source = try fragment_shader_file.readToEndAlloc(self.allocator, 30_000);
+        } else {
+            fragment_shader_source = try self.allocator.dupe(u8, @embedFile("shaders/main_fragment_shader.glsl"));
+        }
+
+        c.glShaderSource(
+            vshader,
+            1,
+            @ptrCast(&vertex_shader_source),
+            &[_]c_int{@as(c_int, @intCast(vertex_shader_source.len))},
+        );
+
+        c.glShaderSource(
+            fshader,
+            1,
+            @ptrCast(&fragment_shader_source),
+            &[_]c_int{@as(c_int, @intCast(fragment_shader_source.len))},
+        );
+
+        c.glCompileShader(vshader);
+        c.glCompileShader(fshader);
+
+        // check vertex shader compilation errors
+        var vshader_success: c_int = 0;
+        c.glGetShaderiv(vshader, c.GL_COMPILE_STATUS, &vshader_success);
+        if (vshader_success == 0) {
+            var log: [512]u8 = undefined;
+            c.glGetShaderInfoLog(vshader, 512, null, &log);
+            std.log.err("vertext shader {s}", .{log});
+        }
+
+        var fshader_success: c_int = 0;
+        // check fragment shader compilation errors
+        c.glGetShaderiv(vshader, c.GL_COMPILE_STATUS, &fshader_success);
+        if (fshader_success == 0) {
+            var log: [512]u8 = undefined;
+            c.glGetShaderInfoLog(fshader, 512, null, &log);
+            std.log.err("fragment shader {s}", .{log});
+        }
+
+        const shaderProgram = c.glCreateProgram();
+
+        c.glAttachShader(shaderProgram, vshader);
+        c.glAttachShader(shaderProgram, fshader);
+        c.glLinkProgram(shaderProgram);
+        var link_success: c_int = undefined;
+        // check linking errors in shader program
+        c.glGetProgramiv(shaderProgram, c.GL_LINK_STATUS, &link_success);
+        if (link_success == 0) {
+            var log: [512]u8 = undefined;
+            c.glGetProgramInfoLog(shaderProgram, 512, null, &log);
+            std.log.err("shader program linking {s}", .{log});
+        }
+
+        c.glUseProgram(shaderProgram);
+
+        const vertices = &[_]f32{
+            // positions    // colors       // texture coords
+            1.0, 1.0, 0.0, 1.0, 0.0, 0.0, 1.0, 1.0, // top right
+            1.0, -1.0, 0.0, 0.0, 1.0, 0.0, 1.0, 0.0, // bottom right
+            -1.0, -1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, // bottom left
+            -1.0, 1.0, 0.0, 1.0, 1.0, 0.0, 0.0, 1.0, // top left
+        };
+
+        const indices = &[_]u8{
+            0, 1, 3, // first triangle
+            1, 2, 3, // second triangle
+        };
+        var VAO: c_uint = undefined;
+        var VBO: c_uint = undefined;
+        var EBO: c_uint = undefined;
+
+        c.glGenVertexArrays(1, &VAO);
+        c.glGenBuffers(1, &VBO);
+        c.glGenBuffers(1, &EBO);
+
+        defer c.glDeleteVertexArrays(1, &VAO);
+        defer c.glDeleteBuffers(1, &VBO);
+        defer c.glDeleteBuffers(1, &EBO);
+
+        c.glBindVertexArray(VAO);
+        c.glBindBuffer(c.GL_ARRAY_BUFFER, VBO);
+        c.glBufferData(c.GL_ARRAY_BUFFER, vertices.len * 4, vertices, c.GL_STATIC_DRAW);
+
+        c.glBindBuffer(c.GL_ELEMENT_ARRAY_BUFFER, EBO);
+        c.glBufferData(c.GL_ELEMENT_ARRAY_BUFFER, indices.len * 4, indices, c.GL_STATIC_DRAW);
+
+        const stride = 8 * @sizeOf(f32);
+        // position attribute
+        c.glVertexAttribPointer(0, 3, c.GL_FLOAT, c.GL_FALSE, stride, @ptrFromInt(0));
+        c.glEnableVertexAttribArray(0);
+        // color attribute
+        c.glVertexAttribPointer(1, 3, c.GL_FLOAT, c.GL_TRUE, stride, @ptrFromInt(3 * @sizeOf(f32)));
+        c.glEnableVertexAttribArray(1);
+        // texture coord attribute
+        c.glVertexAttribPointer(2, 2, c.GL_FLOAT, c.GL_FALSE, stride, @ptrFromInt(6 * @sizeOf(f32)));
+        c.glEnableVertexAttribArray(2);
+
+        c.glBindVertexArray(VAO);
+
+        var texture_id: c.GLuint = undefined;
+        c.glGenTextures(1, &texture_id);
+        c.glBindTexture(c.GL_TEXTURE_2D, texture_id);
+
+        c.glTexParameteri(c.GL_TEXTURE_2D, c.GL_TEXTURE_WRAP_S, c.GL_CLAMP_TO_EDGE);
+        c.glTexParameteri(c.GL_TEXTURE_2D, c.GL_TEXTURE_WRAP_T, c.GL_CLAMP_TO_EDGE);
+        c.glTexParameteri(c.GL_TEXTURE_2D, c.GL_TEXTURE_MIN_FILTER, c.GL_LINEAR_MIPMAP_LINEAR);
+        c.glTexParameteri(c.GL_TEXTURE_2D, c.GL_TEXTURE_MAG_FILTER, c.GL_LINEAR);
+
+        c.glTexImage2D(
+            c.GL_TEXTURE_2D,
+            0,
+            preloaded.format,
+            preloaded.width,
+            preloaded.height,
+            0,
+            @intCast(preloaded.format),
+            c.GL_UNSIGNED_BYTE,
+            frame.ptr,
+        );
+        c.glGenerateMipmap(c.GL_TEXTURE_2D);
+
+        c.glClearColor(0.0, 0.0, 0.0, 1.0);
+        c.glClear(c.GL_COLOR_BUFFER_BIT);
+
+        c.glDrawElements(c.GL_TRIANGLES, 6, c.GL_UNSIGNED_BYTE, @ptrFromInt(0));
+
+        // swap double-buffered framebuffer
+        if (c.eglSwapBuffers(self.egl_display, self.egl_surface) != c.EGL_TRUE) return error.EGLError;
+        std.time.sleep(60000000);
     }
-
-    c.glShaderSource(
-        vshader,
-        1,
-        @ptrCast(&vertex_shader_source),
-        &[_]c_int{@as(c_int, @intCast(vertex_shader_source.len))},
-    );
-
-    c.glShaderSource(
-        fshader,
-        1,
-        @ptrCast(&fragment_shader_source),
-        &[_]c_int{@as(c_int, @intCast(fragment_shader_source.len))},
-    );
-
-    c.glCompileShader(vshader);
-    c.glCompileShader(fshader);
-
-    // check vertex shader compilation errors
-    var vshader_success: c_int = 0;
-    c.glGetShaderiv(vshader, c.GL_COMPILE_STATUS, &vshader_success);
-    if (vshader_success == 0) {
-        var log: [512]u8 = undefined;
-        c.glGetShaderInfoLog(vshader, 512, null, &log);
-        std.log.err("vertext shader {s}", .{log});
-    }
-
-    var fshader_success: c_int = 0;
-    // check fragment shader compilation errors
-    c.glGetShaderiv(vshader, c.GL_COMPILE_STATUS, &fshader_success);
-    if (fshader_success == 0) {
-        var log: [512]u8 = undefined;
-        c.glGetShaderInfoLog(fshader, 512, null, &log);
-        std.log.err("fragment shader {s}", .{log});
-    }
-
-    const shaderProgram = c.glCreateProgram();
-
-    c.glAttachShader(shaderProgram, vshader);
-    c.glAttachShader(shaderProgram, fshader);
-    c.glLinkProgram(shaderProgram);
-    var link_success: c_int = undefined;
-    // check linking errors in shader program
-    c.glGetProgramiv(shaderProgram, c.GL_LINK_STATUS, &link_success);
-    if (link_success == 0) {
-        var log: [512]u8 = undefined;
-        c.glGetProgramInfoLog(shaderProgram, 512, null, &log);
-        std.log.err("shader program linking {s}", .{log});
-    }
-
-    c.glUseProgram(shaderProgram);
-
-    const vertices = &[_]f32{
-        // positions    // colors       // texture coords
-        1.0, 1.0, 0.0, 1.0, 0.0, 0.0, 1.0, 1.0, // top right
-        1.0, -1.0, 0.0, 0.0, 1.0, 0.0, 1.0, 0.0, // bottom right
-        -1.0, -1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, // bottom left
-        -1.0, 1.0, 0.0, 1.0, 1.0, 0.0, 0.0, 1.0, // top left
-    };
-
-    const indices = &[_]u8{
-        0, 1, 3, // first triangle
-        1, 2, 3, // second triangle
-    };
-    var VAO: c_uint = undefined;
-    var VBO: c_uint = undefined;
-    var EBO: c_uint = undefined;
-
-    c.glGenVertexArrays(1, &VAO);
-    c.glGenBuffers(1, &VBO);
-    c.glGenBuffers(1, &EBO);
-
-    defer c.glDeleteVertexArrays(1, &VAO);
-    defer c.glDeleteBuffers(1, &VBO);
-    defer c.glDeleteBuffers(1, &EBO);
-
-    c.glBindVertexArray(VAO);
-    c.glBindBuffer(c.GL_ARRAY_BUFFER, VBO);
-    c.glBufferData(c.GL_ARRAY_BUFFER, vertices.len * 4, vertices, c.GL_STATIC_DRAW);
-
-    c.glBindBuffer(c.GL_ELEMENT_ARRAY_BUFFER, EBO);
-    c.glBufferData(c.GL_ELEMENT_ARRAY_BUFFER, indices.len * 4, indices, c.GL_STATIC_DRAW);
-
-    const stride = 8 * @sizeOf(f32);
-    // position attribute
-    c.glVertexAttribPointer(0, 3, c.GL_FLOAT, c.GL_FALSE, stride, @ptrFromInt(0));
-    c.glEnableVertexAttribArray(0);
-    // color attribute
-    c.glVertexAttribPointer(1, 3, c.GL_FLOAT, c.GL_TRUE, stride, @ptrFromInt(3 * @sizeOf(f32)));
-    c.glEnableVertexAttribArray(1);
-    // texture coord attribute
-    c.glVertexAttribPointer(2, 2, c.GL_FLOAT, c.GL_FALSE, stride, @ptrFromInt(6 * @sizeOf(f32)));
-    c.glEnableVertexAttribArray(2);
-
-    c.glBindVertexArray(VAO);
-
-    var texture_id: c.GLuint = undefined;
-    c.glGenTextures(1, &texture_id);
-    c.glBindTexture(c.GL_TEXTURE_2D, texture_id);
-
-    c.glTexParameteri(c.GL_TEXTURE_2D, c.GL_TEXTURE_WRAP_S, c.GL_CLAMP_TO_EDGE);
-    c.glTexParameteri(c.GL_TEXTURE_2D, c.GL_TEXTURE_WRAP_T, c.GL_CLAMP_TO_EDGE);
-    c.glTexParameteri(c.GL_TEXTURE_2D, c.GL_TEXTURE_MIN_FILTER, c.GL_LINEAR_MIPMAP_LINEAR);
-    c.glTexParameteri(c.GL_TEXTURE_2D, c.GL_TEXTURE_MAG_FILTER, c.GL_LINEAR);
-
-    c.glTexImage2D(
-        c.GL_TEXTURE_2D,
-        0,
-        preloaded.format,
-        preloaded.width,
-        preloaded.height,
-        0,
-        @intCast(preloaded.format),
-        c.GL_UNSIGNED_BYTE,
-        preloaded.bytes.ptr,
-    );
-
-    c.glGenerateMipmap(c.GL_TEXTURE_2D);
-
-    c.glClearColor(0.0, 0.0, 0.0, 1.0);
-    c.glClear(c.GL_COLOR_BUFFER_BIT);
-
-    c.glDrawElements(c.GL_TRIANGLES, 6, c.GL_UNSIGNED_BYTE, @ptrFromInt(0));
-
     try getEglError();
-    // swap double-buffered framebuffer
-    if (c.eglSwapBuffers(self.egl_display, self.egl_surface) != c.EGL_TRUE) return error.EGLError;
 }
 
 pub fn deinit(self: *Render) void {

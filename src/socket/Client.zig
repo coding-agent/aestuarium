@@ -52,7 +52,6 @@ pub fn wallpaper(self: *Client, monitor: ?[]const u8, path: []const u8) !void {
     try self.stream.writeAll(try std.fmt.bufPrintZ(&buf, "wallpaper {s}={s}", .{ monitor orelse "", path }));
 
     const reply_len = try self.stream.read(&buf);
-
     try std.io.getStdOut().writeAll(buf[0 .. reply_len - 1]);
     try std.io.getStdOut().writer().writeByte('\n');
 }

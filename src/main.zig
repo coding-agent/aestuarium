@@ -35,7 +35,7 @@ pub fn main() !u8 {
         },
         else => return err,
     };
-    defer opts.deinit();
+    errdefer opts.deinit();
 
     if (opts.options.help) {
         try args.printHelp(alloc);
@@ -69,7 +69,7 @@ pub fn main() !u8 {
         return 1;
     }
 
-    const cl_state = if (opts.options.preload != null or opts.options.wallpaper != null or opts.options.unload != null) true else false;
+    const isClient = opts.options.preload != null or opts.options.wallpaper != null or opts.options.unload != null;
     if (opts.options.preload) |path| {
         var client = try Client.init(alloc);
         try client.preload(path);
@@ -87,7 +87,7 @@ pub fn main() !u8 {
         client.deinit();
     }
 
-    if (cl_state) {
+    if (isClient) {
         return 0;
     }
 
