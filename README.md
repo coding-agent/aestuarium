@@ -60,7 +60,7 @@ The supported [formats]("https://github.com/zigimg/zigimg#supported-image-format
 - QOI
 - TGA
 
-Yes, it supports animations but you RAM might not like it.
+Yes, it supports animations but your RAM might not like it.
 
 ### Dependencies
 
@@ -70,5 +70,3 @@ Yes, it supports animations but you RAM might not like it.
 - [ziglibs/known-folders](https://github.com/ziglibs/known-folders)
 - [ziglibs/ini](https://github.com/ziglibs/ini)
 - [MasterQ32/zig-args](https://github.com/MasterQ32/zig-args)
-
-
