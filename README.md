@@ -45,6 +45,17 @@ Config template:
 ```ini
 [monitors]
 monitor1=/absolute/path/to/file.png
+
+[shaders]
+# files should be inside the config folder
+vertex=shader1.glsl
+fragment=shader2.glsl
+
+[animations]
+# for animations to run infinitely
+loop=true
+# defaults to file frame duration
+fps=15
 ```
 ### Supported File Formats
 
