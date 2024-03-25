@@ -26,6 +26,7 @@ output_info: OutputInfo,
 preload: *Preload,
 vertex: ?[]const u8,
 fragment: ?[]const u8,
+fps: ?u64 = null,
 
 pub fn init(
     alloc: Allocator,
@@ -36,6 +37,7 @@ pub fn init(
     preload: *Preload,
     vertex_shader: ?[]const u8,
     fragment_shader: ?[]const u8,
+    fps: ?u64,
 ) !Render {
     const surface = try compositor.?.createSurface();
 
@@ -130,17 +132,18 @@ pub fn init(
         .preload = preload,
         .vertex = vertex_shader,
         .fragment = fragment_shader,
+        .fps = fps,
     };
 }
 
 pub fn setWallpaper(
     self: *Render,
-    wallpaper_path: []const u8,
+    path: []const u8,
 ) !void {
-    const preloaded = self.preload.findImageData(wallpaper_path) orelse return error.ImageNotPreloaded;
+    const preloaded = self.preload.findImageData(path) orelse return error.ImageNotPreloaded;
 
     if (preloaded.is_animation) {
-        try renderAnimation(self, preloaded);
+        try runAnimation(self, preloaded);
     } else {
         var vertex_shader_source = try self.allocator.alloc(u8, 30_000);
         var fragment_shader_source = try self.allocator.alloc(u8, 30_000);
@@ -298,8 +301,8 @@ pub fn setWallpaper(
     }
 }
 
-fn renderAnimation(self: *Render, preloaded: *Preload.ImageData) !void {
-    for (preloaded.bytes) |frame| {
+fn runAnimation(self: *Render, preloaded: *Preload.ImageData) !void {
+    for (preloaded.bytes, preloaded.frame_duration.?) |frame, duration| {
         var vertex_shader_source = try self.allocator.alloc(u8, 30_000);
         var fragment_shader_source = try self.allocator.alloc(u8, 30_000);
 
@@ -452,7 +455,12 @@ fn renderAnimation(self: *Render, preloaded: *Preload.ImageData) !void {
 
         // swap double-buffered framebuffer
         if (c.eglSwapBuffers(self.egl_display, self.egl_surface) != c.EGL_TRUE) return error.EGLError;
-        std.time.sleep(60000000);
+
+        if (self.fps) |fps| {
+            std.time.sleep(1_000_000_000 / fps);
+        } else {
+            std.time.sleep(@intFromFloat(duration));
+        }
     }
     try getEglError();
 }

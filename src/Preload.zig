@@ -17,6 +17,7 @@ pub const ImageData = struct {
     height: c_int,
     width: c_int,
     bytes: [][]const u8,
+    frame_duration: ?[]f32,
     // OpenGL Format
     format: c_int,
     zigimg: *Image,
@@ -41,9 +42,7 @@ pub fn preload(self: *Preload, path: []const u8) !void {
 
     var preloaded = try self.pool.create();
 
-    const new_mem_path = try self.alloc.alloc(u8, path.len);
-    @memcpy(new_mem_path, path);
-    preloaded.path = new_mem_path;
+    preloaded.path = try self.alloc.dupe(u8, path);
     preloaded.height = @intCast(image.height);
     preloaded.width = @intCast(image.width);
     preloaded.zigimg = &image;
@@ -51,12 +50,16 @@ pub fn preload(self: *Preload, path: []const u8) !void {
 
     if (image.isAnimation()) {
         preloaded.bytes = try self.alloc.alloc([]u8, image.animation.frames.items.len);
+        var frame_duration = try self.alloc.alloc(f32, image.animation.frames.items.len);
+
         for (image.animation.frames.items, 0..) |frame, i| {
             var bytes = try self.alloc.alloc(u8, frame.pixels.asBytes().len);
             bytes = frame.pixels.asBytes();
             self.mem_usage += bytes.len;
             preloaded.bytes[i] = bytes;
+            frame_duration[i] = frame.duration;
         }
+        preloaded.frame_duration = frame_duration;
     } else {
         preloaded.bytes = try self.alloc.alloc([]u8, 1);
         var bytes = try self.alloc.alloc(u8, image.rawBytes().len);
@@ -67,6 +70,7 @@ pub fn preload(self: *Preload, path: []const u8) !void {
 
     std.log.info("Mem Usage: {d}MB", .{self.mem_usage / (1024 * 1024)});
 
+    // convert from zigimg format to GL format
     preloaded.format = try switch (image.pixelFormat()) {
         .rgba32, .rgba64 => c.GL_RGBA,
         .rgb24, .rgb48, .rgb565, .rgb555 => c.GL_RGB,
@@ -78,6 +82,7 @@ pub fn preload(self: *Preload, path: []const u8) !void {
     try self.preloaded_list.append(preloaded);
 }
 
+// TODO: Change this from O(n) to O(1) for better performance
 pub fn findImageData(self: Preload, path: []const u8) ?*ImageData {
     for (self.preloaded_list.items) |preloaded| {
         if (std.mem.eql(u8, preloaded.path, path)) {
@@ -100,6 +105,13 @@ pub fn unload(self: *Preload, path: []const u8) void {
         for (self.preloaded_list.items, 0..) |preloaded_img, i| {
             if (std.mem.eql(u8, preloaded_img.path, path)) {
                 self.pool.destroy(self.preloaded_list.items[i]);
+                self.alloc.free(preloaded_img.bytes);
+                self.alloc.free(preloaded_img.path);
+                preloaded.zigimg.deinit();
+                self.pool.destroy(preloaded);
+                if (preloaded.frame_duration) |frame_duration| {
+                    self.alloc.free(frame_duration);
+                }
                 _ = self.preloaded_list.swapRemove(i);
             }
             break;
@@ -113,7 +125,10 @@ pub fn deinit(self: *Preload) void {
         self.alloc.free(preloaded.bytes);
         self.alloc.free(preloaded.path);
         preloaded.zigimg.deinit();
-        self.alloc.destroy(preloaded);
+        self.pool.destroy(preloaded);
+        if (preloaded.frame_duration) |frame_duration| {
+            self.alloc.free(frame_duration);
+        }
     }
     self.preloaded_list.deinit();
 }

@@ -69,7 +69,6 @@ pub fn main() !u8 {
         return 1;
     }
 
-    const isClient = opts.options.preload != null or opts.options.wallpaper != null or opts.options.unload != null;
     if (opts.options.preload) |path| {
         var client = try Client.init(alloc);
         try client.preload(path);
@@ -87,7 +86,7 @@ pub fn main() !u8 {
         client.deinit();
     }
 
-    if (isClient) {
+    if (opts.options.preload != null or opts.options.wallpaper != null or opts.options.unload != null) {
         return 0;
     }
 
@@ -97,6 +96,7 @@ pub fn main() !u8 {
 
 fn runMainInstance(alloc: Allocator) !u8 {
     std.log.info("Launching Aestuarium...", .{});
+
     var config = try Config.init(alloc);
     defer config.deinit();
 
@@ -128,6 +128,7 @@ fn runMainInstance(alloc: Allocator) !u8 {
             &preload,
             config.vertex_shader,
             config.fragment_shader,
+            config.fps,
         );
         try rendered.setWallpaper(mw.wallpaper);
         try rendered_outputs.append(&rendered);

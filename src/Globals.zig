@@ -129,7 +129,7 @@ fn registryListener(registry: *wl.Registry, ev: wl.Registry.Event, data: *Global
 
         .global_remove => |remove_event| {
             //TODO handle output removed
-            std.log.warn("Global Removed {}", .{remove_event});
+            std.log.warn("Global Removed {any}", .{remove_event});
         },
     }
 }

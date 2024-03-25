@@ -29,5 +29,9 @@
             .url = "git+https://github.com/coding-agent/ini#26e4fe7d3ecbe7235744c86c9b00e0f8735fc616",
             .hash = "1220cd56f45f8a8300a8dc074c29075847bb061b84485a020ea6d73244dae50af518",
         },
+        .libxev = .{
+            .url = "https://github.com/mitchellh/libxev/archive/2494978bedec01a856e8f3c47a33148ad1755fab.tar.gz",
+            .hash = "12203de3dbf9c235903c71122448ef031622ba8d64b250205934e2a65018b92b9717",
+        },
     },
 }
